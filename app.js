@@ -28,7 +28,7 @@
         if (dataFolderHandle) return dataFolderHandle;
         try {
             dataFolderHandle = await window.showDirectoryPicker({
-                id: 'nova-data-folder',
+                id: 'nova-data-folder-v2',
                 mode: 'readwrite'
             });
             return dataFolderHandle;
@@ -38,36 +38,59 @@
     }
 
     async function exportPageToFolder(page) {
-        const dir = await getDataFolderHandle();
-        if (!dir) return;
-        const fileName = `${page.id}.json`;
-        try {
-            const fileHandle = await dir.getFileHandle(fileName, { create: true });
-            const writable = await fileHandle.createWritable();
-            await writable.write(JSON.stringify(page, null, 2));
-            await writable.close();
-        } catch (err) {
-            console.error('Export to folder failed:', err);
+    if (!dataFolderHandle) {
+        dataFolderHandle = await getDataFolderHandle();
+        if (!dataFolderHandle) return false; // user cancelled
+    }
+    const fileName = `${page.id}.json`;
+    try {
+        const fileHandle = await dataFolderHandle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify(page, null, 2));
+        await writable.close();
+        return true;
+    } catch (err) {
+        console.error('Export failed:', err);
+        // If permission error, clear the handle so next attempt re-prompts
+        if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+            dataFolderHandle = null;
         }
+        return false;
+    }
+}
+
+async function exportAllToFolder() {
+    const dir = await getDataFolderHandle();
+    if (!dir) return; // user cancelled
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const page of allPages) {
+        const ok = await exportPageToFolder(page);
+        if (ok) successCount++; else failCount++;
     }
 
-    async function exportAllToFolder() {
-        const dir = await getDataFolderHandle();
-        if (!dir) return;
-        for (const page of allPages) {
-            await exportPageToFolder(page);
-        }
-        // Also save folders list
-        try {
-            const foldersFile = await dir.getFileHandle('_folders.json', { create: true });
-            const fw = await foldersFile.createWritable();
-            await fw.write(JSON.stringify(allFolders, null, 2));
-            await fw.close();
-        } catch (err) {
-            console.error('Export folders failed:', err);
-        }
+    // Also save folders list
+    try {
+        const foldersFile = await dir.getFileHandle('_folders.json', { create: true });
+        const fw = await foldersFile.createWritable();
+        await fw.write(JSON.stringify(allFolders, null, 2));
+        await fw.close();
+        successCount++;
+    } catch (err) {
+        console.error('Failed to save folders:', err);
+        failCount++;
     }
 
+    if (failCount === 0) {
+        alert(`All notes exported successfully to the selected folder!`);
+    } else {
+        alert(`${successCount} files saved, ${failCount} failed. The folder might be invalid or permissions lost. Please try again and select a valid folder.`);
+        // Clear the handle to force a new picker next time
+        dataFolderHandle = null;
+    }
+}
     // ============ INIT ============
     async function init() {
         await openDatabase();

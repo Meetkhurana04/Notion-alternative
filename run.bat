@@ -5,6 +5,6 @@ echo Starting NovaNotes...
 start /B node git-watcher.js
 
 :: Open the app in the default browser
-start index.html
+start chrome index.html
 
 echo NovaNotes is running!
