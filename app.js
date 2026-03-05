@@ -2,7 +2,7 @@
    NovaNotes - Complete Application Logic
    Local-first, lag-free Notion alternative
    ============================================ */
-
+let isMinimalMode = false;
 (function() {
     'use strict';
 
@@ -103,6 +103,16 @@ async function exportAllToFolder(forceNew = false) {
 
     // ============ INIT ============
     async function init() {
+
+        // Load minimal mode preference
+const savedMinimal = localStorage.getItem('nova_minimalMode') === 'true';
+if (savedMinimal) {
+    isMinimalMode = true;
+    const editorScreen = document.getElementById('editorScreen');
+    const toggleBtn = document.getElementById('btnToggleMinimal');
+    if (editorScreen) editorScreen.classList.add('minimal');
+    if (toggleBtn) toggleBtn.querySelector('i').className = 'fas fa-expand';
+}
         await openDatabase();
         await loadData();
         renderPageTree();
@@ -705,6 +715,10 @@ async function exportAllToFolder(forceNew = false) {
             case 'toggleMarkdown':
                 toggleMarkdownMode();
                 break;
+            
+            case 'toggleMinimal':
+                toggleMinimalMode();
+                break;
 
             case 'exportPage':
                 exportCurrentPage();
@@ -1194,6 +1208,22 @@ async function exportAllToFolder(forceNew = false) {
         icon.className = next === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
     }
 
+    function toggleMinimalMode() {
+    isMinimalMode = !isMinimalMode;
+    const editorScreen = document.getElementById('editorScreen');
+    const toggleBtn = document.getElementById('btnToggleMinimal');
+    if (!editorScreen || !toggleBtn) return;
+
+    if (isMinimalMode) {
+        editorScreen.classList.add('minimal');
+        toggleBtn.querySelector('i').className = 'fas fa-expand';
+    } else {
+        editorScreen.classList.remove('minimal');
+        toggleBtn.querySelector('i').className = 'fas fa-compress';
+    }
+    localStorage.setItem('nova_minimalMode', isMinimalMode);
+}
+
     function loadTheme() {
         const theme = localStorage.getItem('nova_theme') || 'dark';
         document.documentElement.setAttribute('data-theme', theme);
@@ -1485,8 +1515,11 @@ async function exportAllToFolder(forceNew = false) {
         return div.innerHTML;
     }
 
+
     // ============ EVENT LISTENERS ============
     function setupEventListeners() {
+
+        
 
         // Force commit button – creates the force-commit.flag file
 document.getElementById('btnForceCommit').addEventListener('click', async () => {

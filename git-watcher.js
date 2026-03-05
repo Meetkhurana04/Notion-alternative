@@ -41,7 +41,7 @@ normalWatcher.on('all', (event, filePath) => {
     // Skip the force flag (already ignored) and the auto-sync flag
     if (filePath === autoSyncFlag || filePath === forceCommitFlag) return;
 
-    console.log(`Change detected: ${event} ${filePath}`);
+    // console.log(`Change detected: ${event} ${filePath}`);
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => {
         // Check if auto-sync is enabled

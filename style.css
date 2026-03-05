@@ -104,6 +104,48 @@ html {
     scroll-behavior: smooth;
 }
 
+/* ============ MINIMAL VIEW – TOOLBAR & HEADER ============ */
+.editor-screen.minimal .page-header {
+    padding: 5px 40px;
+    align-items: center;
+}
+.editor-screen.minimal .page-icon-picker {
+    font-size: 18px;
+}
+.editor-screen.minimal .page-title-input {
+    font-size: 18px;
+    font-weight: 600;
+    padding: 0;
+}
+.editor-screen.minimal .page-meta {
+    display: none;
+}
+.editor-screen.minimal .breadcrumb {
+    display: none;          /* optional – keep or remove */
+}
+
+/* Toolbar in minimal mode */
+.editor-screen.minimal .toolbar {
+    padding: 2px 40px;       /* reduce vertical padding */
+    /* min-height: 32px;        smaller height */
+}
+.editor-screen.minimal .toolbar-group {
+    /* hide all groups by default – we'll re-show only the ones we want */
+    display: none;
+}
+.editor-screen.minimal .toolbar-group:first-child {
+    /* keep the first group (bold, italic, underline, strikethrough) */
+    display: flex;
+}
+.editor-screen.minimal .toolbar-right {
+    /* always show the right‑most group (minimal toggle, markdown, export, delete) */
+    display: flex;
+}
+/* Optional: if you also want to keep the lists group (bullet & numbered), add this */
+.editor-screen.minimal .toolbar-group:nth-child(4) {  /* adjust index if needed */
+    display: flex;
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--bg-primary);
