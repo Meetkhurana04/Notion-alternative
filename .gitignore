@@ -1,0 +1,8 @@
+# Temporary files from browser file writes
+*.crswap
+*.crdownload
+*.tmp
+
+# NovaNotes specific flag files (if you don't want them tracked)
+data/force-commit.flag
+data/.auto-sync

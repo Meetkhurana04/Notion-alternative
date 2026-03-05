@@ -20,38 +20,48 @@
     let contextMenuTarget = null;
     let allPages = [];
     let allFolders = [];
+let dataFolderHandle = null;
 
-    // ============ FILE SYSTEM HANDLE FOR EXPORT ============
-    let dataFolderHandle = null;
-
-    async function getDataFolderHandle() {
-        if (dataFolderHandle) return dataFolderHandle;
-        try {
-            dataFolderHandle = await window.showDirectoryPicker({
-                id: 'nova-data-folder-v2',
-                mode: 'readwrite'
-            });
-            return dataFolderHandle;
-        } catch {
-            return null;
-        }
+// ============ FILE SYSTEM HANDLE WITH FORCE OPTION ============
+async function getDataFolderHandle(forceNew = false) {
+    if (forceNew) {
+        dataFolderHandle = null;
     }
+    if (dataFolderHandle) return dataFolderHandle;
 
-    async function exportPageToFolder(page) {
-    if (!dataFolderHandle) {
-        dataFolderHandle = await getDataFolderHandle();
-        if (!dataFolderHandle) return false; // user cancelled
-    }
-    const fileName = `${page.id}.json`;
     try {
-        const fileHandle = await dataFolderHandle.getFileHandle(fileName, { create: true });
+        dataFolderHandle = await window.showDirectoryPicker({
+            id: 'nova-data-folder-main',
+            mode: 'readwrite'
+        });
+        console.log('Selected folder:', dataFolderHandle.name);
+        return dataFolderHandle;
+    } catch (err) {
+        console.log('Folder selection cancelled:', err);
+        return null;
+    }
+}
+
+async function exportPageToFolder(page) {
+    const dir = await getDataFolderHandle();  // reuse existing handle
+    if (!dir) return false;
+
+    // Build a nicer filename: ID_SlugifiedTitle.json
+    const safeTitle = (page.title || 'untitled')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '')
+        .substring(0, 50);
+    const fileName = `${page.id}_${safeTitle}.json`;
+
+    try {
+        const fileHandle = await dir.getFileHandle(fileName, { create: true });
         const writable = await fileHandle.createWritable();
         await writable.write(JSON.stringify(page, null, 2));
         await writable.close();
         return true;
     } catch (err) {
-        console.error('Export failed:', err);
-        // If permission error, clear the handle so next attempt re-prompts
+        console.error('Export to folder failed:', err);
         if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
             dataFolderHandle = null;
         }
@@ -59,9 +69,9 @@
     }
 }
 
-async function exportAllToFolder() {
-    const dir = await getDataFolderHandle();
-    if (!dir) return; // user cancelled
+async function exportAllToFolder(forceNew = false) {
+    const dir = await getDataFolderHandle(forceNew);
+    if (!dir) return;
 
     let successCount = 0;
     let failCount = 0;
@@ -84,13 +94,13 @@ async function exportAllToFolder() {
     }
 
     if (failCount === 0) {
-        alert(`All notes exported successfully to the selected folder!`);
+        alert(`✅ All notes exported successfully to folder:\n"${dir.name}"`);
     } else {
-        alert(`${successCount} files saved, ${failCount} failed. The folder might be invalid or permissions lost. Please try again and select a valid folder.`);
-        // Clear the handle to force a new picker next time
-        dataFolderHandle = null;
+        alert(`⚠️ ${successCount} files saved, ${failCount} failed.\nFolder: "${dir.name}"\nCheck console for errors.`);
+        if (failCount > 0) dataFolderHandle = null;
     }
 }
+
     // ============ INIT ============
     async function init() {
         await openDatabase();
@@ -1477,15 +1487,34 @@ async function exportAllToFolder() {
 
     // ============ EVENT LISTENERS ============
     function setupEventListeners() {
-        document.getElementById('btnExportToFolder').addEventListener('click', async () => {
-            try {
-                await exportAllToFolder();
-                alert('All notes exported to data folder!');
-            } catch (err) {
-                console.error('Export failed:', err);
-                alert('Export cancelled or failed.');
-            }
-        });
+
+        // Force commit button – creates the force-commit.flag file
+document.getElementById('btnForceCommit').addEventListener('click', async () => {
+    const dir = await getDataFolderHandle();
+    if (!dir) {
+        alert('Please select a data folder first (use Export to Folder).');
+        return;
+    }
+    try {
+        const flagFile = await dir.getFileHandle('force-commit.flag', { create: true });
+        const writable = await flagFile.createWritable();
+        await writable.write(''); // empty file
+        await writable.close();
+        alert('Force commit triggered! Check terminal for progress.');
+    } catch (err) {
+        console.error('Failed to create force-commit flag:', err);
+        alert('Error: Could not trigger force commit.');
+    }
+});
+       // Existing button – reuses stored folder (or asks once if never chosen)
+document.getElementById('btnExportToFolder').addEventListener('click', async () => {
+    await exportAllToFolder(false);   // do not force new picker
+});
+
+// New button – always forces a new folder selection
+document.getElementById('btnChangeExportFolder').addEventListener('click', async () => {
+    await exportAllToFolder(true);    // force new picker
+});
 
         document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
         document.getElementById('btnNewPage').addEventListener('click', () => createPage());
