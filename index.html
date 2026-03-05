@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NovaNotes</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Highlight.js for code blocks -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- Marked.js for markdown parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+    <!-- DOMPurify for safe HTML -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-bolt"></i>
+                    <span>NovaNotes</span>
+                </div>
+                <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            </div>
+
+            <div class="sidebar-actions">
+                <button class="btn-new-page" id="btnNewPage">
+                    <i class="fas fa-plus"></i>
+                    <span>New Page</span>
+                </button>
+                <button class="btn-new-folder" id="btnNewFolder">
+                    <i class="fas fa-folder-plus"></i>
+                    <span>New Folder</span>
+                </button>
+            </div>
+
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Search notes...">
+            </div>
+
+            <nav class="page-tree" id="pageTree">
+                <!-- Pages rendered here -->
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="btn-icon" id="btnExportAll" title="Export All Data">
+                    <i class="fas fa-download"></i>
+                    <span>Export All</span>
+                </button>
+                <button class="btn-icon" id="btnImportData" title="Import Data">
+                    <i class="fas fa-upload"></i>
+                    <span>Import</span>
+                </button>
+                <button class="btn-icon" id="btnThemeToggle" title="Toggle Theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content" id="mainContent">
+            <!-- Welcome Screen -->
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-inner">
+                    <i class="fas fa-bolt welcome-icon"></i>
+                    <h1>Welcome to NovaNotes</h1>
+                    <p>A fast, local-first note-taking app. No lag, no cloud, your data stays with you.</p>
+                    <div class="welcome-actions">
+                        <button class="btn-primary" id="btnWelcomeNew">
+                            <i class="fas fa-plus"></i> Create First Note
+                        </button>
+                    </div>
+                    <div class="welcome-tips">
+                        <div class="tip">
+                            <i class="fas fa-paste"></i>
+                            <span>Paste from ChatGPT — formatting preserved</span>
+                        </div>
+                        <div class="tip">
+                            <i class="fas fa-image"></i>
+                            <span>Drag & drop or paste images</span>
+                        </div>
+                        <div class="tip">
+                            <i class="fas fa-highlight"></i>
+                            <span>Highlight, edit, organize freely</span>
+                        </div>
+                        <div class="tip">
+                            <i class="fas fa-hdd"></i>
+                            <span>Everything stored locally — zero lag</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Editor Screen -->
+            <div class="editor-screen" id="editorScreen" style="display:none;">
+                <!-- Breadcrumb -->
+                <div class="breadcrumb" id="breadcrumb"></div>
+
+                <!-- Page Header -->
+                <div class="page-header">
+                    <div class="page-icon-picker" id="pageIconPicker">📄</div>
+                    <input type="text" class="page-title-input" id="pageTitleInput" placeholder="Untitled">
+                    <div class="page-meta" id="pageMeta"></div>
+                </div>
+
+                <!-- Cover Image -->
+                <div class="cover-image-container" id="coverImageContainer" style="display:none;">
+                    <img id="coverImage" src="" alt="Cover">
+                    <button class="btn-remove-cover" id="btnRemoveCover">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="toolbar" id="toolbar">
+                    <div class="toolbar-group">
+                        <button class="tool-btn" data-command="bold" title="Bold (Ctrl+B)">
+                            <i class="fas fa-bold"></i>
+                        </button>
+                        <button class="tool-btn" data-command="italic" title="Italic (Ctrl+I)">
+                            <i class="fas fa-italic"></i>
+                        </button>
+                        <button class="tool-btn" data-command="underline" title="Underline (Ctrl+U)">
+                            <i class="fas fa-underline"></i>
+                        </button>
+                        <button class="tool-btn" data-command="strikeThrough" title="Strikethrough">
+                            <i class="fas fa-strikethrough"></i>
+                        </button>
+                    </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-group">
+                        <button class="tool-btn" data-command="highlight" title="Highlight">
+                            <i class="fas fa-highlighter"></i>
+                        </button>
+                        <input type="color" id="highlightColor" value="#fff176" class="color-picker" title="Highlight Color">
+                        <input type="color" id="textColor" value="#ffffff" class="color-picker" title="Text Color">
+                        <button class="tool-btn" data-command="textColor" title="Text Color">
+                            <i class="fas fa-palette"></i>
+                        </button>
+                    </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-group">
+                        <select class="tool-select" id="headingSelect" title="Heading">
+                            <option value="">Normal</option>
+                            <option value="h1">Heading 1</option>
+                            <option value="h2">Heading 2</option>
+                            <option value="h3">Heading 3</option>
+                            <option value="h4">Heading 4</option>
+                        </select>
+                    </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-group">
+                        <button class="tool-btn" data-command="insertUnorderedList" title="Bullet List">
+                            <i class="fas fa-list-ul"></i>
+                        </button>
+                        <button class="tool-btn" data-command="insertOrderedList" title="Numbered List">
+                            <i class="fas fa-list-ol"></i>
+                        </button>
+                        <button class="tool-btn" data-command="toggleChecklist" title="Checklist">
+                            <i class="fas fa-tasks"></i>
+                        </button>
+                    </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-group">
+                        <button class="tool-btn" data-command="toggleCode" title="Code Block">
+                            <i class="fas fa-code"></i>
+                        </button>
+                        <button class="tool-btn" data-command="insertQuote" title="Quote">
+                            <i class="fas fa-quote-right"></i>
+                        </button>
+                        <button class="tool-btn" data-command="insertDivider" title="Divider">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <button class="tool-btn" data-command="insertTable" title="Table">
+                            <i class="fas fa-table"></i>
+                        </button>
+                    </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-group">
+                        <button class="tool-btn" data-command="insertImage" title="Insert Image">
+                            <i class="fas fa-image"></i>
+                        </button>
+                        <button class="tool-btn" data-command="createLink" title="Insert Link">
+                            <i class="fas fa-link"></i>
+                        </button>
+                        <button class="tool-btn" data-command="addCover" title="Add Cover Image">
+                            <i class="fas fa-panorama"></i>
+                        </button>
+                    </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-group">
+                        <button class="tool-btn" data-command="undo" title="Undo (Ctrl+Z)">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                        <button class="tool-btn" data-command="redo" title="Redo (Ctrl+Y)">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                    </div>
+                    <div class="toolbar-right">
+                        <button class="tool-btn" data-command="toggleMarkdown" title="Toggle Markdown View" id="btnToggleMarkdown">
+                            <i class="fas fa-markdown fa-lg">MD</i>
+                        </button>
+                        <button class="tool-btn" data-command="exportPage" title="Export Page">
+                            <i class="fas fa-file-export"></i>
+                        </button>
+                        <button class="tool-btn" data-command="deletePage" title="Delete Page">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Editor Body - Infinite scroll area -->
+                <div class="editor-wrapper" id="editorWrapper">
+                    <div class="editor-body" id="editorBody" contenteditable="true" spellcheck="true" data-placeholder="Start writing, or paste from ChatGPT..."></div>
+                </div>
+
+                <!-- Markdown Editor (hidden by default) -->
+                <div class="markdown-editor" id="markdownEditor" style="display:none;">
+                    <textarea id="markdownInput" placeholder="Write in Markdown..."></textarea>
+                    <div class="markdown-preview" id="markdownPreview"></div>
+                </div>
+
+                <!-- Status bar -->
+                <div class="status-bar" id="statusBar">
+                    <span id="wordCount">0 words</span>
+                    <span id="charCount">0 chars</span>
+                    <span id="saveStatus">Saved</span>
+                    <span id="lastSaved"></span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Emoji Picker Modal -->
+    <div class="modal-overlay" id="emojiModal" style="display:none;">
+        <div class="modal emoji-picker-modal">
+            <div class="modal-header">
+                <h3>Pick an Icon</h3>
+                <button class="modal-close" data-close="emojiModal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="emoji-grid" id="emojiGrid"></div>
+        </div>
+    </div>
+
+    <!-- Table Creator Modal -->
+    <div class="modal-overlay" id="tableModal" style="display:none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Insert Table</h3>
+                <button class="modal-close" data-close="tableModal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <label>Rows: <input type="number" id="tableRows" value="3" min="1" max="50"></label>
+                <label>Columns: <input type="number" id="tableCols" value="3" min="1" max="20"></label>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" id="btnInsertTable">Insert</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="contextMenu" style="display:none;">
+        <div class="context-item" data-action="rename"><i class="fas fa-edit"></i> Rename</div>
+        <div class="context-item" data-action="duplicate"><i class="fas fa-copy"></i> Duplicate</div>
+        <div class="context-item" data-action="move"><i class="fas fa-arrows-alt"></i> Move to Folder</div>
+        <div class="context-item context-divider"></div>
+        <div class="context-item" data-action="export"><i class="fas fa-file-export"></i> Export</div>
+        <div class="context-item context-danger" data-action="delete"><i class="fas fa-trash"></i> Delete</div>
+    </div>
+
+    <input type="file" id="fileImport" style="display:none" accept=".json">
+    <input type="file" id="imageInput" style="display:none" accept="image/*">
+    <input type="file" id="coverInput" style="display:none" accept="image/*">
+
+    <script src="app.js"></script>
+</body>
+</html>
