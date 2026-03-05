@@ -150,15 +150,29 @@ body {
 }
 
 .sidebar.collapsed {
-    width: var(--sidebar-collapsed);
-    min-width: var(--sidebar-collapsed);
-    border-right: none;
+    width: 50px;
+    min-width: 50px;
+    overflow: hidden;
 }
 
-.sidebar.collapsed * {
-    opacity: 0;
-    pointer-events: none;
+.sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    padding: 16px 0;
 }
+
+.sidebar.collapsed .logo span,
+.sidebar.collapsed .sidebar-actions,
+.sidebar.collapsed .search-box,
+.sidebar.collapsed .page-tree,
+.sidebar.collapsed .sidebar-footer span {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-toggle i {
+    transform: rotate(180deg);
+}
+
+
 
 .sidebar-header {
     display: flex;

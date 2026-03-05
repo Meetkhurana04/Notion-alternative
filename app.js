@@ -21,6 +21,53 @@
     let allPages = [];
     let allFolders = [];
 
+    // ============ FILE SYSTEM HANDLE FOR EXPORT ============
+    let dataFolderHandle = null;
+
+    async function getDataFolderHandle() {
+        if (dataFolderHandle) return dataFolderHandle;
+        try {
+            dataFolderHandle = await window.showDirectoryPicker({
+                id: 'nova-data-folder',
+                mode: 'readwrite'
+            });
+            return dataFolderHandle;
+        } catch {
+            return null;
+        }
+    }
+
+    async function exportPageToFolder(page) {
+        const dir = await getDataFolderHandle();
+        if (!dir) return;
+        const fileName = `${page.id}.json`;
+        try {
+            const fileHandle = await dir.getFileHandle(fileName, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(JSON.stringify(page, null, 2));
+            await writable.close();
+        } catch (err) {
+            console.error('Export to folder failed:', err);
+        }
+    }
+
+    async function exportAllToFolder() {
+        const dir = await getDataFolderHandle();
+        if (!dir) return;
+        for (const page of allPages) {
+            await exportPageToFolder(page);
+        }
+        // Also save folders list
+        try {
+            const foldersFile = await dir.getFileHandle('_folders.json', { create: true });
+            const fw = await foldersFile.createWritable();
+            await fw.write(JSON.stringify(allFolders, null, 2));
+            await fw.close();
+        } catch (err) {
+            console.error('Export folders failed:', err);
+        }
+    }
+
     // ============ INIT ============
     async function init() {
         await openDatabase();
@@ -30,12 +77,19 @@
         loadTheme();
         populateEmojiPicker();
         applySidebarState();
+        initGitSync(); // Ask for folder permission once
 
         // Load last opened page
         const lastPage = localStorage.getItem('nova_lastPage');
         if (lastPage && allPages.find(p => p.id === lastPage)) {
             openPage(lastPage);
         }
+    }
+
+    // ============ GIT SYNC INIT ============
+    async function initGitSync() {
+        // Just request the folder handle silently – user can click "Export to Folder" later
+        // or we can auto-request on first save. We'll do it on demand.
     }
 
     // ============ INDEXEDDB ============
@@ -160,8 +214,17 @@
         const page = allPages.find(p => p.id === pageId);
         if (!page) return;
         Object.assign(page, updates, { updatedAt: Date.now() });
-        await dbPut(STORE_PAGES, page);
-        updateSaveStatus('Saved');
+        try {
+            await dbPut(STORE_PAGES, page);
+            updateSaveStatus('Saved');
+            // Auto-export to folder if handle exists
+            if (dataFolderHandle) {
+                await exportPageToFolder(page);
+            }
+        } catch (err) {
+            console.error('Save failed:', err);
+            updateSaveStatus('Save error!');
+        }
     }
 
     async function deletePage(pageId) {
@@ -230,7 +293,6 @@
         img.style.maxWidth = '100%';
         img.setAttribute('data-local', 'true');
 
-        // Insert at cursor or append
         const selection = window.getSelection();
         if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
             const range = selection.getRangeAt(0);
@@ -250,7 +312,6 @@
         const searchTerm = document.getElementById('searchInput').value.toLowerCase();
         tree.innerHTML = '';
 
-        // Filter
         let filteredPages = allPages;
         let filteredFolders = allFolders;
 
@@ -265,7 +326,6 @@
             );
         }
 
-        // Render folders
         filteredFolders.forEach(folder => {
             const folderEl = createFolderElement(folder);
             const children = filteredPages.filter(p => p.folderId === folder.id);
@@ -278,7 +338,6 @@
             tree.appendChild(folderEl);
         });
 
-        // Render root pages (no folder)
         const rootPages = filteredPages.filter(p => !p.folderId);
         rootPages.forEach(page => {
             tree.appendChild(createPageElement(page));
@@ -307,7 +366,6 @@
             <div class="tree-folder-children" style="${isCollapsed ? 'display:none;' : ''}"></div>
         `;
 
-        // Toggle folder
         const toggle = div.querySelector('.tree-folder-toggle');
         toggle.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -319,7 +377,6 @@
             await dbPut(STORE_FOLDERS, folder);
         });
 
-        // Rename on double click
         const label = div.querySelector('.tree-label');
         label.addEventListener('dblclick', (e) => {
             e.stopPropagation();
@@ -346,13 +403,11 @@
             });
         });
 
-        // Add page to folder
         div.querySelector(`[data-add-to-folder]`).addEventListener('click', (e) => {
             e.stopPropagation();
             createPage(folder.id);
         });
 
-        // Delete folder
         div.querySelector(`[data-delete-folder]`).addEventListener('click', (e) => {
             e.stopPropagation();
             if (confirm(`Delete folder "${folder.name}" and all its pages?`)) {
@@ -379,19 +434,16 @@
 
         div.addEventListener('click', () => openPage(page.id));
 
-        // Context menu trigger
         div.querySelector('[data-context-page]').addEventListener('click', (e) => {
             e.stopPropagation();
             showContextMenu(e, page.id);
         });
 
-        // Right click
         div.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             showContextMenu(e, page.id);
         });
 
-        // Drag and drop
         div.addEventListener('dragstart', (e) => {
             e.dataTransfer.setData('text/plain', page.id);
             div.classList.add('dragging');
@@ -407,7 +459,6 @@
 
     // ============ PAGE OPERATIONS ============
     async function openPage(pageId) {
-        // Save current page first
         if (currentPageId) {
             await saveCurrentPage();
         }
@@ -418,17 +469,12 @@
         currentPageId = pageId;
         localStorage.setItem('nova_lastPage', pageId);
 
-        // Show editor
         document.getElementById('welcomeScreen').style.display = 'none';
         document.getElementById('editorScreen').style.display = 'flex';
 
-        // Set title
         document.getElementById('pageTitleInput').value = page.title || '';
-
-        // Set icon
         document.getElementById('pageIconPicker').textContent = page.icon || '📄';
 
-        // Set cover
         if (page.coverImage) {
             document.getElementById('coverImage').src = page.coverImage;
             document.getElementById('coverImageContainer').style.display = 'block';
@@ -436,32 +482,24 @@
             document.getElementById('coverImageContainer').style.display = 'none';
         }
 
-        // Set content
         const editor = document.getElementById('editorBody');
         editor.innerHTML = page.content || '';
 
-        // Process pasted code blocks - add copy buttons
         processCodeBlocks(editor);
 
-        // Set meta
         const meta = document.getElementById('pageMeta');
         const created = new Date(page.createdAt).toLocaleDateString('en-IN', {
             day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
         });
         meta.textContent = `Created: ${created}`;
 
-        // Breadcrumb
         updateBreadcrumb(page);
-
-        // Word count
         updateWordCount();
 
-        // Highlight active in tree
         document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
         const activeItem = document.querySelector(`[data-page-id="${pageId}"]`);
         if (activeItem) activeItem.classList.add('active');
 
-        // If markdown mode, update markdown textarea
         if (isMarkdownMode) {
             document.getElementById('markdownInput').value = htmlToMarkdown(page.content || '');
             updateMarkdownPreview();
@@ -493,7 +531,6 @@
             coverImage: hasCover ? coverImg : null
         });
 
-        // Update sidebar label
         const page = allPages.find(p => p.id === currentPageId);
         if (page) {
             const treeLabel = document.querySelector(`[data-page-id="${currentPageId}"] .tree-label`);
@@ -688,7 +725,6 @@
         wrapper.appendChild(pre);
         insertAtCursor(wrapper);
 
-        // Add a paragraph after for continued typing
         const p = document.createElement('p');
         p.innerHTML = '<br>';
         wrapper.after(p);
@@ -767,7 +803,6 @@
         }
     }
 
-    // ============ HEADING SELECT ============
     function applyHeading(value) {
         if (value) {
             document.execCommand('formatBlock', false, value);
@@ -777,12 +812,11 @@
         triggerSave();
     }
 
-    // ============ PASTE HANDLING (ChatGPT format preservation) ============
+    // ============ PASTE HANDLING ============
     function handlePaste(e) {
         const editor = document.getElementById('editorBody');
         const clipboardData = e.clipboardData || window.clipboardData;
 
-        // Check for images
         const items = clipboardData.items;
         for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf('image') !== -1) {
@@ -793,7 +827,6 @@
             }
         }
 
-        // Check for HTML content (from ChatGPT, web pages etc.)
         const html = clipboardData.getData('text/html');
         if (html && html.trim()) {
             e.preventDefault();
@@ -801,7 +834,6 @@
             insertHtmlAtCursor(cleaned);
             triggerSave();
 
-            // Re-process code blocks after paste
             setTimeout(() => {
                 processCodeBlocks(editor);
                 highlightAllCodeBlocks(editor);
@@ -809,10 +841,8 @@
             return;
         }
 
-        // Plain text - check if it looks like markdown
         const text = clipboardData.getData('text/plain');
         if (text) {
-            // Check if it has markdown-like patterns
             if (hasMarkdownPatterns(text)) {
                 e.preventDefault();
                 const htmlFromMd = renderMarkdown(text);
@@ -824,20 +854,19 @@
                 }, 100);
                 return;
             }
-            // Otherwise let default paste handle it
         }
     }
 
     function hasMarkdownPatterns(text) {
         const patterns = [
-            /^#{1,6}\s/m,           // Headings
-            /\*\*[^*]+\*\*/,        // Bold
-            /```[\s\S]*?```/,       // Code blocks
-            /^\s*[-*+]\s/m,         // Unordered lists
-            /^\s*\d+\.\s/m,         // Ordered lists
-            /^\s*>\s/m,             // Blockquotes
-            /\[.+\]\(.+\)/,        // Links
-            /^\|.+\|$/m            // Tables
+            /^#{1,6}\s/m,
+            /\*\*[^*]+\*\*/,
+            /```[\s\S]*?```/,
+            /^\s*[-*+]\s/m,
+            /^\s*\d+\.\s/m,
+            /^\s*>\s/m,
+            /\[.+\]\(.+\)/,
+            /^\|.+\|$/m
         ];
         let matches = 0;
         patterns.forEach(p => { if (p.test(text)) matches++; });
@@ -845,18 +874,14 @@
     }
 
     function cleanPastedHtml(html) {
-        // Create temp element
         const temp = document.createElement('div');
         temp.innerHTML = html;
 
-        // Remove unwanted elements
         const unwanted = temp.querySelectorAll('script, style, meta, link, head, title, svg.icon');
         unwanted.forEach(el => el.remove());
 
-        // Clean up Google Docs / Word junk
         temp.querySelectorAll('[style]').forEach(el => {
             const style = el.getAttribute('style');
-            // Keep only meaningful styles
             const keepStyles = [];
             if (style.includes('font-weight') && (style.includes('bold') || style.includes('700'))) {
                 keepStyles.push('font-weight:bold');
@@ -890,7 +915,6 @@
             }
         });
 
-        // Remove class attributes but keep code-related ones
         temp.querySelectorAll('[class]').forEach(el => {
             const cls = el.getAttribute('class');
             if (!cls.includes('language-') && !cls.includes('hljs') && !cls.includes('code')) {
@@ -898,14 +922,12 @@
             }
         });
 
-        // Remove empty spans
         temp.querySelectorAll('span').forEach(span => {
             if (!span.getAttribute('style') && !span.getAttribute('class')) {
                 span.replaceWith(...span.childNodes);
             }
         });
 
-        // Sanitize
         return DOMPurify.sanitize(temp.innerHTML, {
             ADD_TAGS: ['mark', 'pre', 'code', 'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'img', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'p', 'div', 'span', 'strong', 'em', 'b', 'i', 'u', 'a', 's', 'del', 'sub', 'sup'],
             ADD_ATTR: ['style', 'class', 'href', 'src', 'alt', 'target', 'contenteditable', 'data-local', 'data-language'],
@@ -943,10 +965,8 @@
         }
     }
 
-    // ============ CODE BLOCK PROCESSING ============
     function processCodeBlocks(container) {
         container.querySelectorAll('pre').forEach(pre => {
-            // Skip already wrapped
             if (pre.parentElement && pre.parentElement.classList.contains('code-block-wrapper')) return;
 
             const wrapper = document.createElement('div');
@@ -964,7 +984,6 @@
                 setTimeout(() => copyBtn.textContent = 'Copy', 1500);
             };
 
-            // Detect language
             const code = pre.querySelector('code');
             if (code) {
                 const langClass = Array.from(code.classList).find(c => c.startsWith('language-'));
@@ -988,14 +1007,12 @@
     function highlightAllCodeBlocks(container) {
         if (typeof hljs === 'undefined') return;
         container.querySelectorAll('pre code').forEach(block => {
-            // Don't re-highlight
             if (!block.classList.contains('hljs')) {
                 hljs.highlightElement(block);
             }
         });
     }
 
-    // ============ MARKDOWN MODE ============
     function toggleMarkdownMode() {
         isMarkdownMode = !isMarkdownMode;
         const editorWrapper = document.getElementById('editorWrapper');
@@ -1007,7 +1024,6 @@
             mdEditor.style.display = 'grid';
             btn.classList.add('active');
 
-            // Convert current HTML to markdown
             const html = document.getElementById('editorBody').innerHTML;
             document.getElementById('markdownInput').value = htmlToMarkdown(html);
             updateMarkdownPreview();
@@ -1016,7 +1032,6 @@
             mdEditor.style.display = 'none';
             btn.classList.remove('active');
 
-            // Convert markdown back to HTML
             const md = document.getElementById('markdownInput').value;
             const html = renderMarkdown(md);
             document.getElementById('editorBody').innerHTML = html;
@@ -1128,7 +1143,6 @@
         const html = renderMarkdown(md);
         document.getElementById('markdownPreview').innerHTML = html;
 
-        // Highlight code
         document.querySelectorAll('#markdownPreview pre code').forEach(block => {
             if (typeof hljs !== 'undefined') {
                 hljs.highlightElement(block);
@@ -1186,7 +1200,6 @@
         menu.style.left = e.clientX + 'px';
         menu.style.top = e.clientY + 'px';
 
-        // Adjust if overflow
         const rect = menu.getBoundingClientRect();
         if (rect.right > window.innerWidth) {
             menu.style.left = (window.innerWidth - rect.width - 10) + 'px';
@@ -1289,7 +1302,6 @@
             const data = JSON.parse(text);
 
             if (data.type === 'NovaNotes_Backup') {
-                // Full backup import
                 if (data.folders) {
                     for (const folder of data.folders) {
                         await dbPut(STORE_FOLDERS, folder);
@@ -1301,8 +1313,7 @@
                     }
                 }
             } else if (data.type === 'NovaNotes_Page') {
-                // Single page import
-                data.page.id = generateId(); // New ID to avoid conflicts
+                data.page.id = generateId();
                 await dbPut(STORE_PAGES, data.page);
             } else {
                 alert('Invalid file format');
@@ -1396,38 +1407,32 @@
 
     // ============ KEYBOARD SHORTCUTS ============
     function handleKeyboard(e) {
-        // Ctrl/Cmd + S - Save
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault();
             saveCurrentPage();
         }
 
-        // Ctrl/Cmd + N - New page
         if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
             e.preventDefault();
             createPage();
         }
 
-        // Ctrl/Cmd + Shift + N - New folder
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'N') {
             e.preventDefault();
             const name = prompt('Folder name:');
             if (name) createFolder(name);
         }
 
-        // Ctrl + \ - Toggle sidebar
         if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
             e.preventDefault();
             toggleSidebar();
         }
 
-        // Escape - close modals
         if (e.key === 'Escape') {
             document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
             hideContextMenu();
         }
 
-        // Tab in code blocks - insert tab instead of switching focus
         if (e.key === 'Tab') {
             const selection = window.getSelection();
             if (selection.anchorNode) {
@@ -1439,14 +1444,8 @@
                 }
             }
         }
-
-        // Slash commands
-        if (e.key === '/' && document.activeElement === document.getElementById('editorBody')) {
-            // Could add slash command menu here in future
-        }
     }
 
-    // ============ UTILITY ============
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -1455,7 +1454,16 @@
 
     // ============ EVENT LISTENERS ============
     function setupEventListeners() {
-        // Sidebar
+        document.getElementById('btnExportToFolder').addEventListener('click', async () => {
+            try {
+                await exportAllToFolder();
+                alert('All notes exported to data folder!');
+            } catch (err) {
+                console.error('Export failed:', err);
+                alert('Export cancelled or failed.');
+            }
+        });
+
         document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
         document.getElementById('btnNewPage').addEventListener('click', () => createPage());
         document.getElementById('btnNewFolder').addEventListener('click', () => {
@@ -1463,18 +1471,14 @@
             if (name) createFolder(name);
         });
 
-        // Search
         document.getElementById('searchInput').addEventListener('input', () => {
             renderPageTree();
         });
 
-        // Welcome
         document.getElementById('btnWelcomeNew').addEventListener('click', () => createPage());
 
-        // Theme
         document.getElementById('btnThemeToggle').addEventListener('click', toggleTheme);
 
-        // Export/Import
         document.getElementById('btnExportAll').addEventListener('click', exportAllData);
         document.getElementById('btnImportData').addEventListener('click', () => {
             document.getElementById('fileImport').click();
@@ -1486,20 +1490,16 @@
             }
         });
 
-        // Page title
         document.getElementById('pageTitleInput').addEventListener('input', () => {
             triggerSave();
-            // Update breadcrumb
             const page = allPages.find(p => p.id === currentPageId);
             if (page) updateBreadcrumb({ ...page, title: document.getElementById('pageTitleInput').value });
         });
 
-        // Icon picker
         document.getElementById('pageIconPicker').addEventListener('click', () => {
             document.getElementById('emojiModal').style.display = 'flex';
         });
 
-        // Editor
         const editor = document.getElementById('editorBody');
 
         editor.addEventListener('input', () => {
@@ -1512,7 +1512,6 @@
         editor.addEventListener('drop', handleEditorDrop);
         editor.addEventListener('dragover', (e) => e.preventDefault());
 
-        // Handle Enter in checklists
         editor.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 const selection = window.getSelection();
@@ -1533,20 +1532,17 @@
             }
         });
 
-        // Toolbar buttons
         document.querySelectorAll('.tool-btn[data-command]').forEach(btn => {
             btn.addEventListener('click', () => {
                 executeCommand(btn.dataset.command);
             });
         });
 
-        // Heading select
         document.getElementById('headingSelect').addEventListener('change', (e) => {
             applyHeading(e.target.value);
             e.target.value = '';
         });
 
-        // Image input
         document.getElementById('imageInput').addEventListener('change', (e) => {
             if (e.target.files[0]) {
                 insertImageFromFile(e.target.files[0]);
@@ -1554,7 +1550,6 @@
             }
         });
 
-        // Cover image
         document.getElementById('coverInput').addEventListener('change', async (e) => {
             if (e.target.files[0]) {
                 const base64 = await fileToBase64(e.target.files[0]);
@@ -1571,7 +1566,6 @@
             triggerSave();
         });
 
-        // Table modal
         document.getElementById('btnInsertTable').addEventListener('click', () => {
             const rows = parseInt(document.getElementById('tableRows').value) || 3;
             const cols = parseInt(document.getElementById('tableCols').value) || 3;
@@ -1580,21 +1574,18 @@
             triggerSave();
         });
 
-        // Modal close buttons
         document.querySelectorAll('[data-close]').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.getElementById(btn.dataset.close).style.display = 'none';
             });
         });
 
-        // Close modals on overlay click
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) overlay.style.display = 'none';
             });
         });
 
-        // Context menu
         document.querySelectorAll('.context-item[data-action]').forEach(item => {
             item.addEventListener('click', () => {
                 handleContextAction(item.dataset.action);
@@ -1607,33 +1598,27 @@
             }
         });
 
-        // Keyboard shortcuts
         document.addEventListener('keydown', handleKeyboard);
 
-        // Markdown editor
         document.getElementById('markdownInput').addEventListener('input', () => {
             updateMarkdownPreview();
             triggerSave();
         });
 
-        // Tree drag & drop
         setupTreeDragDrop();
 
-        // Window resize - mobile sidebar
         window.addEventListener('resize', () => {
             if (window.innerWidth > 768) {
                 document.getElementById('sidebar').classList.remove('mobile-open');
             }
         });
 
-        // Save before unload
         window.addEventListener('beforeunload', () => {
             if (currentPageId) {
                 saveCurrentPage();
             }
         });
 
-        // Handle checkbox clicks in editor
         editor.addEventListener('click', (e) => {
             if (e.target.type === 'checkbox') {
                 const item = e.target.closest('.checklist-item');
@@ -1644,7 +1629,6 @@
             }
         });
 
-        // Mobile sidebar toggle (add a floating button)
         if (window.innerWidth <= 768) {
             const mobileToggle = document.createElement('button');
             mobileToggle.innerHTML = '<i class="fas fa-bars"></i>';
@@ -1656,7 +1640,5 @@
         }
     }
 
-    // ============ START ============
     document.addEventListener('DOMContentLoaded', init);
-
 })();
