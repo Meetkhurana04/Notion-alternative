@@ -1,0 +1,10 @@
+{
+  "id": "nn_mmkvyyst_4nnnumfr0",
+  "title": "Software testing",
+  "content": "<div>\n\n<p style=\"background-color:rgb(21, 21, 23)\"><strong>UNIT - I</strong></p><p style=\"background-color:rgb(21, 21, 23)\">Introduction: Overview of Software Development Life Cycle (SDLC), Significance of Software Testing in SDLC, Objectives and Limitations of software testing. Difference between an Error, Fault and Failure (Software Bug), Software Testing Life Cycle (STLC) and Seven Principles of Software Testing, Role of Software Testing in Software Quality.</p><hr style=\"background-color:none 0% 0% / auto repeat scroll padding-box border-box rgba(255, 255, 255, 0.12)\"><p style=\"background-color:rgb(21, 21, 23)\"><strong>UNIT - II</strong></p><p style=\"background-color:rgb(21, 21, 23)\">Test Case Design: Test Cases and Test Suite, Test Case Planning and Designing, Characteristics of Good Test Case Design, Format of test case.<br>Testing Activities: Levels of Testing - Unit, Integration Testing and System Testing. V Model for Software Testing.</p><hr style=\"background-color:none 0% 0% / auto repeat scroll padding-box border-box rgba(255, 255, 255, 0.12)\"><p style=\"background-color:rgb(21, 21, 23)\"><strong>UNIT - III</strong></p><p style=\"background-color:rgb(21, 21, 23)\">Types of Software Testing: Black box testing, White Box and Gray Box Testing.</p>\n\n<br></div>\n\n<div><div style=\"color:rgb(249, 250, 251)\"><p></p></div></div>",
+  "icon": "📄",
+  "folderId": null,
+  "coverImage": null,
+  "createdAt": 1773163844525,
+  "updatedAt": 1773164068720
+}
