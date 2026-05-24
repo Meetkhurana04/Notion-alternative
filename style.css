@@ -1376,3 +1376,83 @@ mark, .highlight {
         color: #000;
     }
 }
+
+/* ============ SYNC STATUS UI ============ */
+.sync-badge-btn {
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+    background: none;
+    border: none;
+    line-height: 1;
+}
+.sync-badge-btn:hover {
+    background: var(--bg-hover);
+}
+.sync-badge-btn[data-state="no-folder"],
+.sync-badge-btn[data-state="needs-permission"] {
+    animation: pulse-warning 2s infinite;
+}
+@keyframes pulse-warning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Secondary button (welcome screen) */
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    margin-left: 10px;
+}
+.btn-secondary:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Grant access warning banner */
+.grant-access-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 10px 16px;
+    background: rgba(243, 156, 18, 0.12);
+    border: 1px solid rgba(243, 156, 18, 0.4);
+    border-radius: var(--radius);
+    font-size: 13px;
+    color: var(--warning);
+}
+.grant-access-banner button {
+    margin-left: auto;
+    padding: 5px 14px;
+    background: var(--warning);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: var(--transition);
+}
+.grant-access-banner button:hover {
+    opacity: 0.85;
+}
+
+/* Save status colored text */
+#saveStatus {
+    transition: color 0.3s ease;
+    font-size: 12px;
+}

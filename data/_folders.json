@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id": "nn_moitaolj_yi0lp25s8",
+    "name": "English",
+    "parentId": null,
+    "createdAt": 1777391984647,
+    "collapsed": true
+  },
+  {
+    "id": "nn_mpf26gxo_53s2g83ok",
+    "name": "deep learning",
+    "parentId": null,
+    "createdAt": 1779341822268,
+    "collapsed": false
+  }
+]

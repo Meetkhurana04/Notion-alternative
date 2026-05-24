@@ -53,6 +53,9 @@
             </nav>
 
             <div class="sidebar-footer">
+                <button class="btn-icon sync-badge-btn" id="syncBadge" title="Sync status" data-state="loading">
+    📁
+</button>
                 <button class="btn-icon" id="btnForceCommit" title="Force Git commit now">
     <i class="fas fa-rocket"></i>
     <span></span>
@@ -94,6 +97,15 @@
                         <button class="btn-primary" id="btnWelcomeNew">
                             <i class="fas fa-plus"></i> Create First Note
                         </button>
+                        <button class="btn-secondary" id="btnConnectFolder" title="Connect the data folder so notes persist across browser resets">
+                            <i class="fas fa-folder-open"></i> Connect Data Folder
+                        </button>
+                    </div>
+                    <!-- Grant access banner (shown when handle stored but permission revoked) -->
+                    <div id="grantAccessBanner" class="grant-access-banner" style="display:none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Folder access needed to sync your notes.</span>
+                        <button id="btnGrantAccess">Grant Access</button>
                     </div>
                     <div class="welcome-tips">
                         <div class="tip">

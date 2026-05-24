@@ -1,17 +1,19 @@
 /* ============================================
    NovaNotes - Complete Application Logic
    Local-first, lag-free Notion alternative
+   Persistent File-First v3
    ============================================ */
 let isMinimalMode = false;
 (function() {
     'use strict';
 
-    // ============ DATABASE (IndexedDB + LocalStorage hybrid) ============
+    // ============ DATABASE ============
     const DB_NAME = 'NovaNotes';
-    const DB_VERSION = 2;
+    const DB_VERSION = 3;           // bumped: adds STORE_HANDLES
     const STORE_PAGES = 'pages';
     const STORE_FOLDERS = 'folders';
     const STORE_IMAGES = 'images';
+    const STORE_HANDLES = 'handles'; // persists FileSystemDirectoryHandle
 
     let db = null;
     let currentPageId = null;
@@ -20,22 +22,67 @@ let isMinimalMode = false;
     let contextMenuTarget = null;
     let allPages = [];
     let allFolders = [];
-let dataFolderHandle = null;
+    let dataFolderHandle = null;   // in-memory cache of the dir handle
+    let syncPending = false;       // tracks if a folder write is in-flight
 
-// ============ FILE SYSTEM HANDLE WITH FORCE OPTION ============
-async function getDataFolderHandle(forceNew = false) {
-    if (forceNew) {
-        dataFolderHandle = null;
-    }
-    if (dataFolderHandle) return dataFolderHandle;
+// ============ PERSISTENT FOLDER HANDLE ============
+// FileSystemDirectoryHandle objects can be stored in IndexedDB.
+// This lets us restore the handle across sessions without showing
+// the directory picker again — only a silent queryPermission() needed.
 
+async function persistFolderHandle(handle) {
     try {
-        dataFolderHandle = await window.showDirectoryPicker({
-            id: 'nova-data-folder-main',
-            mode: 'readwrite'
-        });
-        console.log('Selected folder:', dataFolderHandle.name);
-        return dataFolderHandle;
+        await dbPutRaw(STORE_HANDLES, { id: 'main-data-folder', handle });
+    } catch(e) { console.warn('Could not persist folder handle:', e); }
+}
+
+async function restoreFolderHandle() {
+    try {
+        const row = await dbGetRaw(STORE_HANDLES, 'main-data-folder');
+        if (!row || !row.handle) return null;
+        const handle = row.handle;
+        // Verify we still have permission (silent — no UI shown)
+        const perm = await handle.queryPermission({ mode: 'readwrite' });
+        if (perm === 'granted') {
+            dataFolderHandle = handle;
+            return handle;
+        }
+        // Permission needs to be re-requested — can only happen in a user gesture,
+        // so we store the handle but wait for the user to click something.
+        // We'll request it lazily on first save attempt.
+        dataFolderHandle = handle; // store it so we can requestPermission later
+        return null; // but don't signal it as active yet
+    } catch(e) {
+        console.warn('Could not restore folder handle:', e);
+        return null;
+    }
+}
+
+async function ensureFolderPermission() {
+    if (!dataFolderHandle) return false;
+    try {
+        let perm = await dataFolderHandle.queryPermission({ mode: 'readwrite' });
+        if (perm === 'granted') return true;
+        // request triggers browser UI — only works inside a user gesture
+        perm = await dataFolderHandle.requestPermission({ mode: 'readwrite' });
+        return perm === 'granted';
+    } catch(e) {
+        return false;
+    }
+}
+
+async function getDataFolderHandle(forceNew = false) {
+    if (forceNew) dataFolderHandle = null;
+    if (dataFolderHandle) {
+        const ok = await ensureFolderPermission();
+        if (ok) return dataFolderHandle;
+    }
+    try {
+        const handle = await window.showDirectoryPicker({ id: 'nova-data-folder-main', mode: 'readwrite' });
+        dataFolderHandle = handle;
+        await persistFolderHandle(handle); // save for next session
+        updateSyncStatus('synced');
+        return handle;
     } catch (err) {
         console.log('Folder selection cancelled:', err);
         return null;
@@ -43,30 +90,79 @@ async function getDataFolderHandle(forceNew = false) {
 }
 
 async function exportPageToFolder(page) {
-    const dir = await getDataFolderHandle();  // reuse existing handle
-    if (!dir) return false;
+    if (!dataFolderHandle) return false;
+    const ok = await ensureFolderPermission();
+    if (!ok) { updateSyncStatus('no-folder'); return false; }
 
-    // Build a nicer filename: ID_SlugifiedTitle.json
+    if (page.deleted) {
+        // Write tombstone so next session knows the page was deleted
+        // (prevents resurrection from stale folder file)
+    }
+
     const safeTitle = (page.title || 'untitled')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_|_$/g, '')
-        .substring(0, 50);
+        .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').substring(0, 50);
     const fileName = `${page.id}_${safeTitle}.json`;
 
     try {
-        const fileHandle = await dir.getFileHandle(fileName, { create: true });
+        const fileHandle = await dataFolderHandle.getFileHandle(fileName, { create: true });
         const writable = await fileHandle.createWritable();
         await writable.write(JSON.stringify(page, null, 2));
         await writable.close();
         return true;
     } catch (err) {
         console.error('Export to folder failed:', err);
-        if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
-            dataFolderHandle = null;
-        }
+        if (err.name === 'NotAllowedError') updateSyncStatus('no-folder');
         return false;
     }
+}
+
+// ============ STARTUP FOLDER SCAN + MERGE ============
+async function scanFolderForPages(dirHandle) {
+    const pages = [];
+    const folders = [];
+    try {
+        for await (const [name, fileHandle] of dirHandle.entries()) {
+            if (fileHandle.kind !== 'file') continue;
+            if (name === '_folders.json') {
+                try {
+                    const file = await fileHandle.getFile();
+                    const data = JSON.parse(await file.text());
+                    if (Array.isArray(data)) folders.push(...data);
+                } catch(e) { console.warn('Could not read _folders.json', e); }
+                continue;
+            }
+            // Only read files matching our naming pattern: starts with nn_
+            if (!name.startsWith('nn_') || !name.endsWith('.json')) continue;
+            try {
+                const file = await fileHandle.getFile();
+                const page = JSON.parse(await file.text());
+                if (page && page.id) pages.push(page);
+            } catch(e) { console.warn('Could not read', name, e); }
+        }
+    } catch(e) { console.error('Folder scan failed:', e); }
+    return { pages, folders };
+}
+
+function mergePageSets(idbPages, folderPages) {
+    // Merge by updatedAt — newer version always wins.
+    // Deleted tombstones (page.deleted=true) are also respected.
+    const merged = new Map();
+    idbPages.forEach(p => merged.set(p.id, p));
+    folderPages.forEach(fp => {
+        const existing = merged.get(fp.id);
+        if (!existing || (fp.updatedAt || 0) > (existing.updatedAt || 0)) {
+            merged.set(fp.id, fp);
+        }
+    });
+    // Filter out deleted tombstones from the active list
+    return Array.from(merged.values()).filter(p => !p.deleted);
+}
+
+function mergeFolderSets(idbFolders, folderFolders) {
+    const merged = new Map();
+    idbFolders.forEach(f => merged.set(f.id, f));
+    folderFolders.forEach(f => { if (!merged.has(f.id)) merged.set(f.id, f); });
+    return Array.from(merged.values());
 }
 
 async function exportAllToFolder(forceNew = false) {
@@ -103,24 +199,70 @@ async function exportAllToFolder(forceNew = false) {
 
     // ============ INIT ============
     async function init() {
-
         // Load minimal mode preference
-const savedMinimal = localStorage.getItem('nova_minimalMode') === 'true';
-if (savedMinimal) {
-    isMinimalMode = true;
-    const editorScreen = document.getElementById('editorScreen');
-    const toggleBtn = document.getElementById('btnToggleMinimal');
-    if (editorScreen) editorScreen.classList.add('minimal');
-    if (toggleBtn) toggleBtn.querySelector('i').className = 'fas fa-expand';
-}
+        const savedMinimal = localStorage.getItem('nova_minimalMode') === 'true';
+        if (savedMinimal) {
+            isMinimalMode = true;
+            const editorScreen = document.getElementById('editorScreen');
+            const toggleBtn = document.getElementById('btnToggleMinimal');
+            if (editorScreen) editorScreen.classList.add('minimal');
+            if (toggleBtn) toggleBtn.querySelector('i').className = 'fas fa-expand';
+        }
+
+        updateSyncStatus('loading');
         await openDatabase();
-        await loadData();
+
+        // ---- STEP 1: Load IndexedDB data ----
+        const idbPages = await dbGetAll(STORE_PAGES);
+        const idbFolders = await dbGetAll(STORE_FOLDERS);
+
+        // ---- STEP 2: Restore saved folder handle (silent, no UI) ----
+        const restoredHandle = await restoreFolderHandle();
+        let folderPages = [];
+        let folderFolders = [];
+        let folderConnected = false;
+
+        if (restoredHandle) {
+            // We have a handle with granted permission — scan the folder
+            updateSyncStatus('loading');
+            const scanned = await scanFolderForPages(restoredHandle);
+            folderPages = scanned.pages;
+            folderFolders = scanned.folders;
+            folderConnected = true;
+        } else if (dataFolderHandle) {
+            // Handle stored but permission needs a user gesture — show badge prompt
+            updateSyncStatus('needs-permission');
+        }
+
+        // ---- STEP 3: Merge by updatedAt (folder wins if newer) ----
+        const mergedPages = mergePageSets(idbPages, folderPages);
+        const mergedFolders = mergeFolderSets(idbFolders, folderFolders);
+
+        // ---- STEP 4: Write winners back to IndexedDB (reconcile) ----
+        if (folderPages.length > 0 || folderFolders.length > 0) {
+            for (const p of mergedPages) await dbPut(STORE_PAGES, p);
+            for (const f of mergedFolders) await dbPut(STORE_FOLDERS, f);
+        }
+
+        // ---- STEP 5: Use merged data ----
+        allPages = mergedPages;
+        allFolders = mergedFolders;
+        allPages.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        allFolders.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
         renderPageTree();
         setupEventListeners();
         loadTheme();
         populateEmojiPicker();
         applySidebarState();
-        initGitSync(); // Ask for folder permission once
+
+        if (folderConnected) {
+            updateSyncStatus('synced');
+            // Write all merged pages back to folder too (reconcile both ways)
+            reconcileFolder(mergedPages, mergedFolders).catch(console.warn);
+        } else if (!dataFolderHandle) {
+            updateSyncStatus('no-folder');
+        }
 
         // Load last opened page
         const lastPage = localStorage.getItem('nova_lastPage');
@@ -129,10 +271,19 @@ if (savedMinimal) {
         }
     }
 
-    // ============ GIT SYNC INIT ============
-    async function initGitSync() {
-        // Just request the folder handle silently – user can click "Export to Folder" later
-        // or we can auto-request on first save. We'll do it on demand.
+    // Write all current pages to folder silently (background reconcile)
+    async function reconcileFolder(pages, folders) {
+        if (!dataFolderHandle) return;
+        const ok = await ensureFolderPermission();
+        if (!ok) return;
+        for (const p of pages) await exportPageToFolder(p);
+        // Save folders list
+        try {
+            const fh = await dataFolderHandle.getFileHandle('_folders.json', { create: true });
+            const w = await fh.createWritable();
+            await w.write(JSON.stringify(folders, null, 2));
+            await w.close();
+        } catch(e) { console.warn('reconcileFolder folders write failed', e); }
     }
 
     // ============ INDEXEDDB ============
@@ -153,6 +304,10 @@ if (savedMinimal) {
                 if (!db.objectStoreNames.contains(STORE_IMAGES)) {
                     db.createObjectStore(STORE_IMAGES, { keyPath: 'id' });
                 }
+                // v3: store for persisting FileSystemDirectoryHandle objects
+                if (!db.objectStoreNames.contains(STORE_HANDLES)) {
+                    db.createObjectStore(STORE_HANDLES, { keyPath: 'id' });
+                }
             };
 
             request.onsuccess = (e) => {
@@ -164,6 +319,24 @@ if (savedMinimal) {
                 console.error('DB Error:', e);
                 reject(e);
             };
+        });
+    }
+
+    // Raw IDB helpers that bypass the module-level 'db' check timing issue
+    function dbGetRaw(storeName, key) {
+        return new Promise((resolve, reject) => {
+            const store = db.transaction(storeName, 'readonly').objectStore(storeName);
+            const req = store.get(key);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+    function dbPutRaw(storeName, data) {
+        return new Promise((resolve, reject) => {
+            const store = db.transaction(storeName, 'readwrite').objectStore(storeName);
+            const req = store.put(data);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
         });
     }
 
@@ -259,18 +432,26 @@ if (savedMinimal) {
         Object.assign(page, updates, { updatedAt: Date.now() });
         try {
             await dbPut(STORE_PAGES, page);
-            updateSaveStatus('Saved');
-            // Auto-export to folder if handle exists
+            updateSyncStatus('saved');
+            // Always try to write to folder (non-blocking, background)
             if (dataFolderHandle) {
-                await exportPageToFolder(page);
+                exportPageToFolder(page).then(ok => {
+                    if (ok) updateSyncStatus('synced');
+                }).catch(console.warn);
             }
         } catch (err) {
             console.error('Save failed:', err);
-            updateSaveStatus('Save error!');
+            updateSyncStatus('error');
         }
     }
 
     async function deletePage(pageId) {
+        const page = allPages.find(p => p.id === pageId);
+        // Write tombstone to folder so next session won't resurrect from file
+        if (page && dataFolderHandle) {
+            const tombstone = { ...page, deleted: true, updatedAt: Date.now() };
+            exportPageToFolder(tombstone).catch(console.warn);
+        }
         await dbDelete(STORE_PAGES, pageId);
         allPages = allPages.filter(p => p.id !== pageId);
         renderPageTree();
@@ -584,20 +765,56 @@ if (savedMinimal) {
     }
 
     function triggerSave() {
-        updateSaveStatus('Saving...');
+        updateSyncStatus('saving');
         clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
             saveCurrentPage();
         }, 500);
     }
 
-    function updateSaveStatus(status) {
+    // ============ SYNC STATUS INDICATOR ============
+    // States: loading | saving | saved | synced | no-folder | needs-permission | error
+    function updateSyncStatus(state) {
         const el = document.getElementById('saveStatus');
-        el.textContent = status;
-        if (status === 'Saved') {
-            const now = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-            document.getElementById('lastSaved').textContent = `at ${now}`;
+        const lastEl = document.getElementById('lastSaved');
+        const badge = document.getElementById('syncBadge');
+        if (!el) return;
+
+        const now = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+        const states = {
+            'loading':          { text: '⏳ Loading…',        color: 'var(--text-tertiary)',  badge: '⏳', tip: 'Loading notes…' },
+            'saving':           { text: '✏️ Saving…',         color: 'var(--warning)',        badge: '✏️', tip: 'Saving…' },
+            'saved':            { text: '✅ Saved',            color: 'var(--success)',        badge: '✅', tip: `Saved at ${now}` },
+            'synced':           { text: '🟢 Synced',          color: 'var(--success)',        badge: '🟢', tip: `Synced to disk at ${now}` },
+            'no-folder':        { text: '📁 No folder',       color: 'var(--warning)',        badge: '📁', tip: 'Click to connect data folder' },
+            'needs-permission': { text: '🔑 Click to sync',   color: 'var(--warning)',        badge: '🔑', tip: 'Click sync badge to grant folder access' },
+            'error':            { text: '❌ Save error',      color: 'var(--danger)',         badge: '❌', tip: 'Save failed — check console' },
+        };
+
+        const s = states[state] || states['saved'];
+        el.textContent = s.text;
+        el.style.color = s.color;
+        if (lastEl) lastEl.textContent = (state === 'saved' || state === 'synced') ? `at ${now}` : '';
+
+        // Update sidebar sync badge
+        if (badge) {
+            badge.textContent = s.badge;
+            badge.title = s.tip;
+            badge.dataset.state = state;
         }
+
+        // Show/hide grant access banner
+        const banner = document.getElementById('grantAccessBanner');
+        if (banner) banner.style.display = (state === 'needs-permission') ? 'flex' : 'none';
+    }
+
+    // Keep old name as alias for any code that might still call it
+    function updateSaveStatus(status) {
+        if (status === 'Saving...') updateSyncStatus('saving');
+        else if (status === 'Saved') updateSyncStatus('saved');
+        else if (status === 'Save error!') updateSyncStatus('error');
+        else updateSyncStatus('saved');
     }
 
     function updateWordCount() {
@@ -1519,35 +1736,99 @@ if (savedMinimal) {
     // ============ EVENT LISTENERS ============
     function setupEventListeners() {
 
-        
+        // ---- Sync Badge: click to connect folder or grant permission ----
+        document.getElementById('syncBadge').addEventListener('click', async () => {
+            const state = document.getElementById('syncBadge').dataset.state;
+            if (state === 'needs-permission') {
+                // Try to re-grant access via a user gesture
+                const ok = await ensureFolderPermission();
+                if (ok) {
+                    updateSyncStatus('loading');
+                    const scanned = await scanFolderForPages(dataFolderHandle);
+                    const mergedPages = mergePageSets(allPages, scanned.pages);
+                    const mergedFolders = mergeFolderSets(allFolders, scanned.folders);
+                    for (const p of mergedPages) await dbPut(STORE_PAGES, p);
+                    for (const f of mergedFolders) await dbPut(STORE_FOLDERS, f);
+                    allPages = mergedPages;
+                    allFolders = mergedFolders;
+                    renderPageTree();
+                    updateSyncStatus('synced');
+                    document.getElementById('grantAccessBanner').style.display = 'none';
+                }
+            } else {
+                // Connect/change folder
+                const dir = await getDataFolderHandle(state === 'no-folder' ? false : false);
+                if (dir) {
+                    updateSyncStatus('loading');
+                    const scanned = await scanFolderForPages(dir);
+                    const mergedPages = mergePageSets(allPages, scanned.pages);
+                    const mergedFolders = mergeFolderSets(allFolders, scanned.folders);
+                    for (const p of mergedPages) await dbPut(STORE_PAGES, p);
+                    for (const f of mergedFolders) await dbPut(STORE_FOLDERS, f);
+                    allPages = mergedPages;
+                    allFolders = mergedFolders;
+                    renderPageTree();
+                    reconcileFolder(mergedPages, mergedFolders).catch(console.warn);
+                    updateSyncStatus('synced');
+                }
+            }
+        });
+
+        // ---- Welcome screen Connect Folder button ----
+        document.getElementById('btnConnectFolder').addEventListener('click', async () => {
+            const dir = await getDataFolderHandle(false);
+            if (dir) {
+                updateSyncStatus('loading');
+                const scanned = await scanFolderForPages(dir);
+                const mergedPages = mergePageSets(allPages, scanned.pages);
+                const mergedFolders = mergeFolderSets(allFolders, scanned.folders);
+                for (const p of mergedPages) await dbPut(STORE_PAGES, p);
+                for (const f of mergedFolders) await dbPut(STORE_FOLDERS, f);
+                allPages = mergedPages;
+                allFolders = mergedFolders;
+                allPages.sort((a,b) => (b.updatedAt||0)-(a.updatedAt||0));
+                renderPageTree();
+                reconcileFolder(mergedPages, mergedFolders).catch(console.warn);
+                updateSyncStatus('synced');
+                // If notes restored, open last page
+                const lastPage = localStorage.getItem('nova_lastPage');
+                if (lastPage && allPages.find(p => p.id === lastPage)) openPage(lastPage);
+            }
+        });
+
+        // ---- Grant Access banner button ----
+        document.getElementById('btnGrantAccess').addEventListener('click', async () => {
+            document.getElementById('syncBadge').click(); // reuse badge logic
+        });
 
         // Force commit button – creates the force-commit.flag file
-document.getElementById('btnForceCommit').addEventListener('click', async () => {
-    const dir = await getDataFolderHandle();
-    if (!dir) {
-        alert('Please select a data folder first (use Export to Folder).');
-        return;
-    }
-    try {
-        const flagFile = await dir.getFileHandle('force-commit.flag', { create: true });
-        const writable = await flagFile.createWritable();
-        await writable.write(''); // empty file
-        await writable.close();
-        alert('Force commit triggered! Check terminal for progress.');
-    } catch (err) {
-        console.error('Failed to create force-commit flag:', err);
-        alert('Error: Could not trigger force commit.');
-    }
-});
-       // Existing button – reuses stored folder (or asks once if never chosen)
-document.getElementById('btnExportToFolder').addEventListener('click', async () => {
-    await exportAllToFolder(false);   // do not force new picker
-});
+        document.getElementById('btnForceCommit').addEventListener('click', async () => {
+            const dir = await getDataFolderHandle();
+            if (!dir) {
+                alert('Please select a data folder first (use Export to Folder).');
+                return;
+            }
+            try {
+                const flagFile = await dir.getFileHandle('force-commit.flag', { create: true });
+                const writable = await flagFile.createWritable();
+                await writable.write('');
+                await writable.close();
+                alert('Force commit triggered! Check terminal for progress.');
+            } catch (err) {
+                console.error('Failed to create force-commit flag:', err);
+                alert('Error: Could not trigger force commit.');
+            }
+        });
 
-// New button – always forces a new folder selection
-document.getElementById('btnChangeExportFolder').addEventListener('click', async () => {
-    await exportAllToFolder(true);    // force new picker
-});
+        // Existing button – reuses stored folder
+        document.getElementById('btnExportToFolder').addEventListener('click', async () => {
+            await exportAllToFolder(false);
+        });
+
+        // Always forces a new folder selection
+        document.getElementById('btnChangeExportFolder').addEventListener('click', async () => {
+            await exportAllToFolder(true);
+        });
 
         document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
         document.getElementById('btnNewPage').addEventListener('click', () => createPage());
