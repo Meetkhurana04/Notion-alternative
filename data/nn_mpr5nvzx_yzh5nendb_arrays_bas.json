@@ -1,0 +1,11 @@
+{
+  "id": "nn_mpr5nvzx_yzh5nendb",
+  "title": "Arrays bas",
+  "content": "\n\n<div style=\"background-color:#121314\">\n\n<div style=\"background-color:#121314\"><div>\n\n<h1 style=\"color:rgb(187, 190, 191)\" id=\"dsa\" dir=\"auto\" class=\"code-line\" data-line=\"0\">DSA</h1><h1 style=\"color:rgb(187, 190, 191)\" id=\"-phase-1--array-basics--largest-element\" dir=\"auto\" class=\"code-line\" data-line=\"2\">📌 PHASE 1 — ARRAY BASICS &amp; LARGEST ELEMENT</h1><hr dir=\"auto\" class=\"code-line\" data-line=\"4\"><h2 style=\"color:rgb(187, 190, 191)\" id=\"-what-is-array-ds\" dir=\"auto\" class=\"code-line\" data-line=\"6\">🔹 What is Array (DS)?</h2><p style=\"color:rgb(187, 190, 191)\" dir=\"auto\" class=\"code-line\" data-line=\"8\">Array is a&nbsp;<strong>DS (Data Structure)</strong>&nbsp;which store&nbsp;<strong>similar element</strong>.</p><p style=\"color:rgb(187, 190, 191)\" dir=\"auto\" class=\"code-line\" data-line=\"10\">Agar yeh DS ek particular type ka hai</p><p style=\"color:rgb(187, 190, 191)\" dir=\"auto\" class=\"code-line\" data-line=\"12\">toh&nbsp;<strong>similar type hona chahiye</strong></p><p style=\"color:rgb(187, 190, 191)\" dir=\"auto\" class=\"code-line\" data-line=\"14\">chahe&nbsp;<strong>integer ho, char ho, string ho, pair ho</strong>.</p><p style=\"color:rgb(187, 190, 191)\" dir=\"auto\" class=\"code-line\" data-line=\"16\">Array looks like</p><div class=\"code-block-wrapper\" contenteditable=\"false\"><button class=\"copy-code-btn\">Copy</button><pre style=\"background-color:rgb(36, 37, 38)\"><code style=\"background-color:none;color:rgb(187, 190, 191)\" dir=\"auto\" class=\"code-line hljs language-css\" data-line=\"18\" contenteditable=\"true\" data-highlighted=\"yes\"><span class=\"hljs-selector-attr\">[ ]</span><span class=\"hljs-selector-attr\">[ ]</span><span class=\"hljs-selector-attr\">[ ]</span>\n\n</code></pre></div><hr dir=\"auto\" class=\"code-line\" data-line=\"23\"><h2 style=\"color:rgb(187, 190, 191)\" id=\"-declaration-of-array\" dir=\"auto\" class=\"code-line\" data-line=\"25\">🔹 Declaration of Array</h2>\n\n<br></div></div></div>\n\n",
+  "icon": "📄",
+  "folderId": "nn_mpr5nss9_chctdxuzc",
+  "coverImage": null,
+  "createdAt": 1780073267902,
+  "updatedAt": 1780073338953,
+  "deleted": true
+}
