@@ -104,6 +104,13 @@ async function exportPageToFolder(page) {
     const fileName = `${page.id}_${safeTitle}.json`;
 
     try {
+        // Delete old duplicate files with same page ID to prevent file bloat
+        for await (const [name] of dataFolderHandle.entries()) {
+            if (name.startsWith(page.id + '_') && name.endsWith('.json') && name !== fileName) {
+                try { await dataFolderHandle.removeEntry(name); } catch(e) {}
+            }
+        }
+
         const fileHandle = await dataFolderHandle.getFileHandle(fileName, { create: true });
         const writable = await fileHandle.createWritable();
         await writable.write(JSON.stringify(page, null, 2));
@@ -199,6 +206,20 @@ async function exportAllToFolder(forceNew = false) {
 
     // ============ INIT ============
     async function init() {
+        // URL parameter ?reset clears IndexedDB and reloads fresh from folder
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('reset')) {
+            await openDatabase();
+            const stores = [STORE_PAGES, STORE_FOLDERS, STORE_IMAGES, STORE_HANDLES];
+            for (const s of stores) {
+                const keys = await dbGetAll(s);
+                for (const k of keys) await dbDelete(s, k.id || k);
+            }
+            db?.close();
+            db = null;
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+
         // Load minimal mode preference
         const savedMinimal = localStorage.getItem('nova_minimalMode') === 'true';
         if (savedMinimal) {
