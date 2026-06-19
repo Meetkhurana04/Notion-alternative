@@ -235,6 +235,9 @@
                         </button>
                     </div>
                     <div class="toolbar-right">
+                        <button class="tool-btn" data-command="toggleNotebook" title="Toggle Notebook View" id="btnToggleNotebook">
+    <i class="fas fa-book"></i>
+</button>
                         <button class="tool-btn" data-command="toggleMinimal" title="Toggle minimal view" id="btnToggleMinimal">
     <i class="fas fa-compress"></i>
 </button>
@@ -253,6 +256,23 @@
                 <!-- Editor Body - Infinite scroll area -->
                 <div class="editor-wrapper" id="editorWrapper">
                     <div class="editor-body" id="editorBody" contenteditable="true" spellcheck="true" data-placeholder="Start writing, or paste from ChatGPT..."></div>
+                    <!-- Notebook View -->
+                    <div class="notebook-container" id="notebookContainer">
+                        <div class="notebook-viewport" id="notebookViewport">
+                            <div class="notebook-track" id="notebookTrack">
+                                <!-- Spreads rendered here -->
+                            </div>
+                        </div>
+                        <div class="notebook-nav" id="notebookNav">
+                            <button class="notebook-nav-btn" id="notebookPrev" title="Previous spread">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <span class="notebook-page-indicator" id="notebookIndicator">Page 1 of 1</span>
+                            <button class="notebook-nav-btn" id="notebookNext" title="Next spread">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Markdown Editor (hidden by default) -->

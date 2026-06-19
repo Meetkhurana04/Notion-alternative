@@ -1362,6 +1362,412 @@ mark, .highlight {
     border-top: 2px solid var(--accent);
 }
 
+/* ============ NOTEBOOK MODE ============ */
+:root {
+    --notebook-paper: #2a2825;
+    --notebook-ruled: rgba(255,255,255,0.06);
+    --notebook-binding: #1a1a1a;
+    --notebook-binding-edge: rgba(0,0,0,0.3);
+    --notebook-shadow: 0 2px 16px rgba(0,0,0,0.5);
+    --notebook-shadow-left: -2px 0 12px rgba(0,0,0,0.4);
+    --notebook-shadow-right: 2px 0 12px rgba(0,0,0,0.4);
+    --notebook-spread-bg: #1a1a1a;
+    --notebook-text: #d4d0c8;
+}
+
+[data-theme="light"] {
+    --notebook-paper: #f5f0e8;
+    --notebook-ruled: rgba(80, 120, 200, 0.2);
+    --notebook-binding: #3a3020;
+    --notebook-binding-edge: rgba(0,0,0,0.08);
+    --notebook-shadow: 0 2px 16px rgba(0,0,0,0.1);
+    --notebook-shadow-left: -2px 0 10px rgba(0,0,0,0.06);
+    --notebook-shadow-right: 2px 0 10px rgba(0,0,0,0.06);
+    --notebook-spread-bg: #e8e0d0;
+    --notebook-text: #2c2c2c;
+}
+
+.notebook-container {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    background: var(--notebook-spread-bg);
+}
+
+.notebook-mode .editor-body {
+    display: none;
+}
+
+.notebook-mode .notebook-container {
+    display: flex;
+}
+
+.notebook-mode .editor-wrapper {
+    overflow: hidden;
+    background: var(--notebook-spread-bg);
+}
+
+.notebook-viewport {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 0;
+}
+
+.notebook-track {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+}
+
+.notebook-spread {
+    min-width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 10px;
+    flex-shrink: 0;
+}
+
+.notebook-page {
+    width: calc(50% - 30px);
+    max-width: 480px;
+    height: min(620px, calc(100vh - 220px));
+    min-height: 400px;
+    background: var(--notebook-paper);
+    padding: 36px 32px 32px 36px;
+    font-size: 15px;
+    line-height: 1.8;
+    overflow: hidden;
+    position: relative;
+    color: var(--notebook-text);
+    /* Notebook ruled lines */
+    background-color: var(--notebook-paper);
+    background-image: repeating-linear-gradient(
+        transparent,
+        transparent 26px,
+        var(--notebook-ruled) 26px,
+        var(--notebook-ruled) 27px
+    );
+    background-size: 100% 27px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Left page edges - shadow on right side */
+.notebook-page.left {
+    border-radius: 4px 2px 2px 4px;
+    box-shadow: var(--notebook-shadow-left);
+    margin-right: 1px;
+    padding-right: 26px;
+}
+
+/* Right page edges - shadow on left side */
+.notebook-page.right {
+    border-radius: 2px 4px 4px 2px;
+    box-shadow: var(--notebook-shadow-right);
+    margin-left: 1px;
+    padding-left: 32px;
+}
+
+/* Single page (when odd number of pages) */
+.notebook-page.single {
+    border-radius: 4px;
+    box-shadow: var(--notebook-shadow);
+    margin: 0 auto;
+}
+
+/* Binding in the center */
+.notebook-binding {
+    width: 20px;
+    min-width: 20px;
+    height: 90%;
+    align-self: center;
+    background: var(--notebook-binding);
+    border-radius: 3px;
+    position: relative;
+    margin: 0 4px;
+    box-shadow: 0 0 8px rgba(0,0,0,0.3);
+}
+
+/* Stitching effect on binding */
+.notebook-binding::before {
+    content: '';
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 60%;
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(200,180,140,0.2) 0px,
+        rgba(200,180,140,0.2) 3px,
+        transparent 3px,
+        transparent 8px
+    );
+    border-radius: 1px;
+}
+
+/* Page content styling in notebook mode */
+.notebook-page h1 {
+    font-size: 1.6em;
+    font-weight: 700;
+    margin: 0.6em 0 0.4em;
+    color: var(--notebook-text);
+    border-bottom: 1px solid var(--notebook-ruled);
+    padding-bottom: 6px;
+}
+
+.notebook-page h2 {
+    font-size: 1.3em;
+    font-weight: 600;
+    margin: 0.5em 0 0.3em;
+    color: var(--notebook-text);
+}
+
+.notebook-page h3 {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin: 0.4em 0 0.2em;
+    color: var(--notebook-text);
+}
+
+.notebook-page p {
+    margin: 0.3em 0;
+}
+
+.notebook-page blockquote {
+    border-left: 3px solid rgba(91, 155, 213, 0.5);
+    padding: 6px 12px;
+    margin: 8px 0;
+    font-style: italic;
+    background: rgba(255,255,255,0.03);
+    border-radius: 0 4px 4px 0;
+}
+
+.notebook-page pre {
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+    padding: 12px 14px;
+    font-size: 12px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.notebook-page code {
+    font-size: 0.9em;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(0,0,0,0.15);
+}
+
+.notebook-page pre code {
+    background: none;
+    padding: 0;
+}
+
+.notebook-page ul, .notebook-page ol {
+    padding-left: 24px;
+    margin: 6px 0;
+}
+
+.notebook-page li {
+    margin: 2px 0;
+}
+
+.notebook-page table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 13px;
+}
+
+.notebook-page th {
+    background: rgba(255,255,255,0.05);
+    padding: 6px 10px;
+    border: 1px solid var(--notebook-ruled);
+    font-weight: 600;
+}
+
+.notebook-page td {
+    padding: 4px 10px;
+    border: 1px solid var(--notebook-ruled);
+}
+
+.notebook-page hr {
+    border: none;
+    border-top: 1px solid var(--notebook-ruled);
+    margin: 12px 0;
+}
+
+.notebook-page img {
+    max-width: 100%;
+    border-radius: 4px;
+    margin: 8px 0;
+}
+
+/* Navigation */
+.notebook-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 8px 20px;
+    background: var(--notebook-spread-bg);
+    border-top: 1px solid var(--notebook-ruled);
+}
+
+.notebook-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 20px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    transition: var(--transition);
+}
+
+.notebook-nav-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.notebook-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-tertiary);
+}
+
+.notebook-page-indicator {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    min-width: 120px;
+    text-align: center;
+}
+
+/* Notebook empty state */
+.notebook-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-tertiary);
+    font-size: 14px;
+    width: 100%;
+    height: 100%;
+}
+
+.notebook-empty i {
+    font-size: 48px;
+    opacity: 0.3;
+}
+
+/* Page turn placeholder / empty right page */
+.notebook-page.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    font-size: 14px;
+    opacity: 0.4;
+}
+
+/* Light theme overrides for notebook content */
+[data-theme="light"] .notebook-page blockquote {
+    background: rgba(0,0,0,0.02);
+}
+
+[data-theme="light"] .notebook-page pre {
+    background: rgba(0,0,0,0.04);
+}
+
+[data-theme="light"] .notebook-page code {
+    background: rgba(0,0,0,0.05);
+}
+
+[data-theme="light"] .notebook-page th {
+    background: rgba(0,0,0,0.03);
+}
+
+/* Notebook page transition overlay */
+.notebook-turn-shadow-left,
+.notebook-turn-shadow-right {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 30px;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.notebook-page.left .notebook-turn-shadow-right {
+    right: 0;
+    background: linear-gradient(to right, transparent, rgba(0,0,0,0.15));
+}
+
+.notebook-page.right .notebook-turn-shadow-left {
+    left: 0;
+    background: linear-gradient(to left, transparent, rgba(0,0,0,0.15));
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .notebook-page {
+        width: calc(50% - 20px);
+        padding: 20px 16px;
+        height: min(450px, calc(100vh - 180px));
+        min-height: 300px;
+        font-size: 14px;
+        line-height: 1.6;
+        background-size: 100% 24px;
+    }
+
+    .notebook-page.left {
+        padding-right: 14px;
+    }
+
+    .notebook-page.right {
+        padding-left: 16px;
+    }
+
+    .notebook-binding {
+        width: 12px;
+        min-width: 12px;
+        margin: 0 2px;
+    }
+
+    .notebook-nav {
+        padding: 6px 12px;
+        gap: 8px;
+    }
+
+    .notebook-nav-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+}
+
 /* Print Styles */
 @media print {
     .sidebar, .toolbar, .status-bar, .breadcrumb {

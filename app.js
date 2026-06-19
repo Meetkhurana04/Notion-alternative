@@ -4,6 +4,7 @@
    Persistent File-First v3
    ============================================ */
 let isMinimalMode = false;
+let isNotebookMode = false;
 (function() {
     'use strict';
 
@@ -229,6 +230,9 @@ async function exportAllToFolder(forceNew = false) {
             if (editorScreen) editorScreen.classList.add('minimal');
             if (toggleBtn) toggleBtn.querySelector('i').className = 'fas fa-expand';
         }
+
+        // Load notebook mode preference
+        loadNotebookModePreference();
 
         updateSyncStatus('loading');
         await openDatabase();
@@ -704,6 +708,7 @@ async function exportAllToFolder(forceNew = false) {
 
     // ============ PAGE OPERATIONS ============
     async function openPage(pageId) {
+        clearTimeout(saveTimer);
         if (currentPageId) {
             await saveCurrentPage();
         }
@@ -750,6 +755,10 @@ async function exportAllToFolder(forceNew = false) {
             updateMarkdownPreview();
         }
 
+        if (isNotebookMode) {
+            enterNotebookMode();
+        }
+
         updateSaveStatus('Saved');
     }
 
@@ -763,8 +772,22 @@ async function exportAllToFolder(forceNew = false) {
     async function saveCurrentPage() {
         if (!currentPageId) return;
 
+        let content;
+        if (isNotebookMode) {
+            const track = document.getElementById('notebookTrack');
+            const pages = track.querySelectorAll('.notebook-page');
+            let fullContent = '';
+            pages.forEach(page => {
+                if (!page.classList.contains('empty')) {
+                    fullContent += page.innerHTML;
+                }
+            });
+            content = fullContent || document.getElementById('editorBody').innerHTML;
+        } else {
+            content = document.getElementById('editorBody').innerHTML;
+        }
+
         const title = document.getElementById('pageTitleInput').value;
-        const content = document.getElementById('editorBody').innerHTML;
         const icon = document.getElementById('pageIconPicker').textContent;
         const coverImg = document.getElementById('coverImage').src;
         const hasCover = document.getElementById('coverImageContainer').style.display !== 'none';
@@ -956,6 +979,10 @@ async function exportAllToFolder(forceNew = false) {
             
             case 'toggleMinimal':
                 toggleMinimalMode();
+                break;
+
+            case 'toggleNotebook':
+                toggleNotebookMode();
                 break;
 
             case 'exportPage':
@@ -1304,6 +1331,11 @@ async function exportAllToFolder(forceNew = false) {
         const mdEditor = document.getElementById('markdownEditor');
         const btn = document.getElementById('btnToggleMarkdown');
 
+        // Exit notebook mode if entering markdown mode
+        if (isMarkdownMode && isNotebookMode) {
+            toggleNotebookMode();
+        }
+
         if (isMarkdownMode) {
             editorWrapper.style.display = 'none';
             mdEditor.style.display = 'grid';
@@ -1461,6 +1493,203 @@ async function exportAllToFolder(forceNew = false) {
     }
     localStorage.setItem('nova_minimalMode', isMinimalMode);
 }
+
+    // ============ NOTEBOOK MODE ============
+    function toggleNotebookMode() {
+        isNotebookMode = !isNotebookMode;
+        const editorScreen = document.getElementById('editorScreen');
+        const toggleBtn = document.getElementById('btnToggleNotebook');
+
+        // Exit markdown mode if entering notebook mode
+        if (isNotebookMode && isMarkdownMode) {
+            toggleMarkdownMode();
+        }
+
+        if (isNotebookMode) {
+            editorScreen.classList.add('notebook-mode');
+            toggleBtn.querySelector('i').className = 'fas fa-book-open';
+            enterNotebookMode();
+        } else {
+            editorScreen.classList.remove('notebook-mode');
+            toggleBtn.querySelector('i').className = 'fas fa-book';
+            exitNotebookMode();
+        }
+
+        localStorage.setItem('nova_notebookMode', isNotebookMode);
+    }
+
+    function enterNotebookMode() {
+        const editor = document.getElementById('editorBody');
+        const content = editor.innerHTML;
+        buildNotebookPages(content);
+        updateWordCount();
+    }
+
+    function exitNotebookMode() {
+        const track = document.getElementById('notebookTrack');
+        const pages = track.querySelectorAll('.notebook-page');
+        let fullContent = '';
+        pages.forEach(page => {
+            if (!page.classList.contains('empty')) {
+                fullContent += page.innerHTML;
+            }
+        });
+        if (fullContent.trim()) {
+            const editor = document.getElementById('editorBody');
+            editor.innerHTML = fullContent;
+        }
+        track.innerHTML = '';
+        currentSpread = 0;
+        totalSpreads = 0;
+        updateWordCount();
+    }
+
+    let currentSpread = 0;
+    let totalSpreads = 0;
+
+    function buildNotebookPages(contentHtml) {
+        const track = document.getElementById('notebookTrack');
+        track.innerHTML = '';
+        currentSpread = 0;
+
+        if (!contentHtml || contentHtml.trim() === '') {
+            track.appendChild(createEmptySpread());
+            totalSpreads = 1;
+            updateNotebookNav();
+            return;
+        }
+
+        const pageContents = paginateContent(contentHtml);
+        totalSpreads = Math.ceil(pageContents.length / 2);
+
+        for (let i = 0; i < pageContents.length; i += 2) {
+            const leftContent = pageContents[i];
+            const rightContent = i + 1 < pageContents.length ? pageContents[i + 1] : null;
+            track.appendChild(createSpread(leftContent, rightContent));
+        }
+
+        if (totalSpreads === 0) {
+            track.appendChild(createEmptySpread());
+            totalSpreads = 1;
+        }
+
+        updateNotebookNav();
+        goToSpread(0);
+    }
+
+    function paginateContent(html) {
+        const viewport = document.getElementById('notebookViewport');
+        const pageContents = [];
+        const pageWidth = Math.max(280, (viewport.offsetWidth || 800) / 2 - 36);
+
+        const measurePage = document.createElement('div');
+        measurePage.className = 'notebook-page left';
+        measurePage.style.cssText = 'position:fixed;left:-9999px;top:0;visibility:hidden;';
+        measurePage.style.width = pageWidth + 'px';
+        measurePage.style.padding = '36px 32px 32px 36px';
+        measurePage.style.fontSize = '15px';
+        measurePage.style.lineHeight = '1.8';
+        document.body.appendChild(measurePage);
+
+        const pageHeight = measurePage.offsetHeight;
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = html;
+        const elements = Array.from(wrapper.children);
+
+        let currentFragment = document.createDocumentFragment();
+        measurePage.innerHTML = '';
+
+        for (const el of elements) {
+            const clone = el.cloneNode(true);
+            measurePage.appendChild(clone);
+
+            if (measurePage.scrollHeight > pageHeight && measurePage.children.length > 1) {
+                measurePage.removeChild(clone);
+                pageContents.push(measurePage.innerHTML);
+                measurePage.innerHTML = '';
+                measurePage.appendChild(clone);
+            }
+        }
+
+        if (measurePage.children.length > 0 || pageContents.length === 0) {
+            pageContents.push(measurePage.innerHTML);
+        }
+
+        document.body.removeChild(measurePage);
+        return pageContents;
+    }
+
+    function createSpread(leftContent, rightContent) {
+        const spread = document.createElement('div');
+        spread.className = 'notebook-spread';
+
+        const leftPage = document.createElement('div');
+        leftPage.className = 'notebook-page left';
+        leftPage.innerHTML = leftContent || '';
+
+        const binding = document.createElement('div');
+        binding.className = 'notebook-binding';
+
+        const rightPage = document.createElement('div');
+        rightPage.className = 'notebook-page right';
+        if (rightContent) {
+            rightPage.innerHTML = rightContent;
+        } else {
+            rightPage.classList.add('empty');
+        }
+
+        spread.appendChild(leftPage);
+        spread.appendChild(binding);
+        spread.appendChild(rightPage);
+
+        return spread;
+    }
+
+    function createEmptySpread() {
+        const spread = document.createElement('div');
+        spread.className = 'notebook-spread';
+
+        const emptyPage = document.createElement('div');
+        emptyPage.className = 'notebook-page single';
+        emptyPage.classList.add('empty');
+        emptyPage.innerHTML = '<div style="text-align:center;opacity:0.4;padding:40px;"><i class="fas fa-book" style="font-size:48px;display:block;margin-bottom:12px;"></i><span>Start writing to fill your notebook</span></div>';
+
+        spread.appendChild(emptyPage);
+        return spread;
+    }
+
+    function goToSpread(index) {
+        const track = document.getElementById('notebookTrack');
+        if (!track) return;
+        index = Math.max(0, Math.min(index, totalSpreads - 1));
+        currentSpread = index;
+        track.style.transform = `translateX(-${index * 100}%)`;
+        updateNotebookNav();
+    }
+
+    function updateNotebookNav() {
+        const prevBtn = document.getElementById('notebookPrev');
+        const nextBtn = document.getElementById('notebookNext');
+        const indicator = document.getElementById('notebookIndicator');
+
+        if (prevBtn) prevBtn.disabled = currentSpread <= 0;
+        if (nextBtn) nextBtn.disabled = currentSpread >= totalSpreads - 1;
+        if (indicator) {
+            indicator.textContent = `Spread ${currentSpread + 1} of ${totalSpreads}`;
+        }
+    }
+
+    function loadNotebookModePreference() {
+        const saved = localStorage.getItem('nova_notebookMode') === 'true';
+        if (saved) {
+            isNotebookMode = true;
+            const editorScreen = document.getElementById('editorScreen');
+            const toggleBtn = document.getElementById('btnToggleNotebook');
+            if (editorScreen) editorScreen.classList.add('notebook-mode');
+            if (toggleBtn) toggleBtn.querySelector('i').className = 'fas fa-book-open';
+        }
+    }
 
     function loadTheme() {
         const theme = localStorage.getItem('nova_theme') || 'dark';
@@ -1881,6 +2110,64 @@ async function exportAllToFolder(forceNew = false) {
             triggerSave();
             const page = allPages.find(p => p.id === currentPageId);
             if (page) updateBreadcrumb({ ...page, title: document.getElementById('pageTitleInput').value });
+        });
+
+        const notebookPrev = document.getElementById('notebookPrev');
+        const notebookNext = document.getElementById('notebookNext');
+        if (notebookPrev) {
+            notebookPrev.addEventListener('click', () => {
+                goToSpread(currentSpread - 1);
+            });
+        }
+        if (notebookNext) {
+            notebookNext.addEventListener('click', () => {
+                goToSpread(currentSpread + 1);
+            });
+        }
+        document.addEventListener('keydown', (e) => {
+            if (!isNotebookMode) return;
+            const tag = document.activeElement && document.activeElement.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement && document.activeElement.isContentEditable) return;
+            if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+                e.preventDefault();
+                goToSpread(currentSpread - 1);
+            } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+                e.preventDefault();
+                goToSpread(currentSpread + 1);
+            }
+        });
+
+        // Touch swipe support for notebook
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const viewport = document.getElementById('notebookViewport');
+        if (viewport) {
+            viewport.addEventListener('touchstart', (e) => {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }, { passive: true });
+            viewport.addEventListener('touchend', (e) => {
+                if (!isNotebookMode) return;
+                const dx = e.changedTouches[0].clientX - touchStartX;
+                const dy = e.changedTouches[0].clientY - touchStartY;
+                if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                    if (dx < 0) goToSpread(currentSpread + 1);
+                    else goToSpread(currentSpread - 1);
+                }
+            }, { passive: true });
+        }
+
+        // Re-paginate on resize (debounced)
+        let notebookResizeTimer = null;
+        window.addEventListener('resize', () => {
+            if (!isNotebookMode) return;
+            clearTimeout(notebookResizeTimer);
+            notebookResizeTimer = setTimeout(() => {
+                const editor = document.getElementById('editorBody');
+                if (editor.innerHTML.trim()) {
+                    buildNotebookPages(editor.innerHTML);
+                }
+            }, 400);
         });
 
         document.getElementById('pageIconPicker').addEventListener('click', () => {
