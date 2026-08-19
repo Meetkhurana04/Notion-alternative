@@ -11,7 +11,7 @@
     "name": "DSA",
     "parentId": null,
     "createdAt": 1780073263738,
-    "collapsed": true
+    "collapsed": false
   },
   {
     "id": "nn_moitaolj_yi0lp25s8",
@@ -28,6 +28,20 @@
     "collapsed": true
   },
   {
+    "id": "nn_msgcpw5w_4v9utzagc",
+    "name": "fastapi",
+    "parentId": null,
+    "createdAt": 1785950337812,
+    "collapsed": false
+  },
+  {
+    "id": "nn_msfrsw67_obu7omg29",
+    "name": "mongodb",
+    "parentId": null,
+    "createdAt": 1785915205855,
+    "collapsed": true
+  },
+  {
     "id": "nn_mps5748r_hc2hyicwh",
     "name": "SOrting",
     "parentId": null,
@@ -39,7 +53,7 @@
     "name": "SQL DBMS",
     "parentId": null,
     "createdAt": 1784030263134,
-    "collapsed": false
+    "collapsed": true
   },
   {
     "id": "nn_mpi25mio_lpws9zl48",
