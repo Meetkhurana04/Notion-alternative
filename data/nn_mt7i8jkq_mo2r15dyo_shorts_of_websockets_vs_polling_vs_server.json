@@ -1,0 +1,10 @@
+{
+  "id": "nn_mt7i8jkq_mo2r15dyo",
+  "title": "shorts of  WebSockets vs Polling vs Server ",
+  "content": "<div><br></div><div>overhead of websockets ;&nbsp;</div><div>long connections ;</div><div>redis&nbsp;</div><div>and a load balancer</div><div>,verticall scaling is good but expensive&nbsp;</div><div>horizontal scaling is poossible but with overheads ;&nbsp;</div><div><br></div><div>ans why need websockets like post request is very less ; toh itna krne ki kya need h&nbsp;</div>",
+  "icon": "📄",
+  "folderId": "nn_mt7gqo6u_4deu286fn",
+  "coverImage": null,
+  "createdAt": 1787592192795,
+  "updatedAt": 1787592361249
+}

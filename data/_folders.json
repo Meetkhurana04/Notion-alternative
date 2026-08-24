@@ -11,7 +11,7 @@
     "name": "DSA",
     "parentId": null,
     "createdAt": 1780073263738,
-    "collapsed": false
+    "collapsed": true
   },
   {
     "id": "nn_moitaolj_yi0lp25s8",
@@ -68,5 +68,12 @@
     "parentId": null,
     "createdAt": 1780154522760,
     "collapsed": true
+  },
+  {
+    "id": "nn_mt7gqo6u_4deu286fn",
+    "name": "vetic",
+    "parentId": null,
+    "createdAt": 1787589679350,
+    "collapsed": false
   }
 ]
