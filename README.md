@@ -18,11 +18,14 @@ Why a server (not opening `index.html` directly)? The `file://` protocol can't r
 
 **How it behaves**
 - Every open → all notes loaded fresh from `data/`.
-- Edits auto-save straight into `data/` (local, instant).
-- 🚀 button → `git add data/ && commit && push` (normal push, on demand).
+- Edits auto-save straight into `data/` (local, atomic write). Clicking between pages without editing writes nothing.
+- **Nothing is ever deleted automatically.** Deleting a note writes `"deleted": true` into its file (a tombstone); the file stays.
+- 🚀 button → `git add --ignore-removal data/ && commit && push`. A file missing from disk is **never** committed as a deletion — only you remove files from git (`git rm`, or on GitHub).
+- Open the same note in two tabs and edit both → the stale tab's save is refused (you get a warning) instead of overwriting.
 - Per-page export (📤 / right-click → Export) → clean `.md` file.
+- `node test_server.js` checks these rules on a throwaway temp repo.
 
-> Opening `index.html` over `file://` still works as a read/write fallback on IndexedDB, but won't load `data/` or push. Use the server.
+> Opening `index.html` over `file://` only edits the browser's own storage — it never writes to `data/` and can't push. Use the server.
 
 ---
 

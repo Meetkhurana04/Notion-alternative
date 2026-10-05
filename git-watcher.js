@@ -11,16 +11,18 @@ const forceCommitFlag = path.join(dataFolder, 'force-commit.flag');
 // Function to run git add, commit, push
 function runGitCommands() {
     console.log('Running git commands...');
-    exec('git add data/', { cwd: gitRepo }, (err, stdout, stderr) => {
+    // --ignore-removal: never stage deleted files; only you remove files from git.
+    exec('git add --ignore-removal data/', { cwd: gitRepo }, (err, stdout, stderr) => {
         if (err) return console.error('git add error:', err);
         exec('git commit -m "Auto-sync notes"', { cwd: gitRepo }, (err, stdout, stderr) => {
             if (err && !err.message.includes('nothing to commit')) {
                 console.error('git commit error:', err);
             } else {
                 console.log('Committed, pushing...');
-                exec('git push -f', { cwd: gitRepo }, (err, stdout, stderr) => {
+                // Normal push: -f could overwrite history on GitHub.
+                exec('git push', { cwd: gitRepo }, (err, stdout, stderr) => {
                     if (err) console.error('git push error:', err);
-                    else console.log('Force Push successful');
+                    else console.log('Push successful');
                 });
             }
         });
