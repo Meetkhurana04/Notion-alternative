@@ -26,6 +26,57 @@ let isNotebookMode = false;
     let dataFolderHandle = null;   // in-memory cache of the dir handle
     let syncPending = false;       // tracks if a folder write is in-flight
 
+// ============ LOCAL SERVER MODE ============
+// When the app is opened over http://localhost (server.js running), the data/
+// folder is the single source of truth: we load it fresh on every open and
+// write saves/deletes straight back to it. No picker, no File System Access API.
+// Over file:// these all no-op and the old folder-handle path is used instead.
+const SERVER_API = (location.protocol === 'http:' || location.protocol === 'https:') ? location.origin : null;
+let serverMode = false;
+let folderSyncTimer = null;
+
+async function serverLoad() {
+    if (!SERVER_API) return null;
+    try {
+        const res = await fetch(SERVER_API + '/api/data', { cache: 'no-store' });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || !Array.isArray(data.pages)) return null;
+        return data;
+    } catch (e) { return null; }
+}
+
+function serverSavePage(page) {
+    if (!serverMode) return;
+    fetch(SERVER_API + '/api/save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(page)
+    }).then(r => updateSyncStatus(r.ok ? 'synced' : 'error'))
+      .catch(() => updateSyncStatus('error'));
+}
+
+function serverDeletePage(id) {
+    if (!serverMode) return;
+    fetch(SERVER_API + '/api/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id })
+    }).catch(() => {});
+}
+
+// Debounced — folder mutations (create/rename/collapse/delete) often fire in bursts.
+function scheduleFolderSync() {
+    if (!serverMode) return;
+    clearTimeout(folderSyncTimer);
+    folderSyncTimer = setTimeout(() => {
+        fetch(SERVER_API + '/api/folders', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(allFolders)
+        }).catch(() => {});
+    }, 400);
+}
+
+async function serverPush() {
+    const res = await fetch(SERVER_API + '/api/push', { method: 'POST' });
+    return res.json();
+}
+
 // ============ PERSISTENT FOLDER HANDLE ============
 // FileSystemDirectoryHandle objects can be stored in IndexedDB.
 // This lets us restore the handle across sessions without showing
@@ -237,7 +288,31 @@ async function exportAllToFolder(forceNew = false) {
         updateSyncStatus('loading');
         await openDatabase();
 
-        // ---- STEP 1: Load IndexedDB data ----
+        // ---- SERVER MODE: data/ is the source of truth, loaded fresh every open ----
+        const fromServer = await serverLoad();
+        if (fromServer) {
+            serverMode = true;
+            allPages = fromServer.pages.filter(p => !p.deleted);
+            allFolders = Array.isArray(fromServer.folders) ? fromServer.folders : [];
+            // Mirror into IndexedDB as an offline cache (server still wins on next load).
+            try {
+                for (const p of allPages) await dbPut(STORE_PAGES, p);
+                for (const f of allFolders) await dbPut(STORE_FOLDERS, f);
+            } catch (e) { console.warn('IDB mirror failed:', e); }
+            allPages.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            allFolders.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            renderPageTree();
+            setupEventListeners();
+            loadTheme();
+            populateEmojiPicker();
+            applySidebarState();
+            updateSyncStatus('synced');
+            const last = localStorage.getItem('nova_lastPage');
+            if (last && allPages.find(p => p.id === last)) openPage(last);
+            return;
+        }
+
+        // ---- STEP 1: Load IndexedDB data (file:// fallback path) ----
         const idbPages = await dbGetAll(STORE_PAGES);
         const idbFolders = await dbGetAll(STORE_FOLDERS);
 
@@ -431,6 +506,7 @@ async function exportAllToFolder(forceNew = false) {
             updatedAt: Date.now()
         };
         await dbPut(STORE_PAGES, page);
+        serverSavePage(page);
         allPages.unshift(page);
         renderPageTree();
         openPage(page.id);
@@ -447,6 +523,7 @@ async function exportAllToFolder(forceNew = false) {
         };
         await dbPut(STORE_FOLDERS, folder);
         allFolders.push(folder);
+        scheduleFolderSync();
         renderPageTree();
         return folder;
     }
@@ -458,8 +535,9 @@ async function exportAllToFolder(forceNew = false) {
         try {
             await dbPut(STORE_PAGES, page);
             updateSyncStatus('saved');
-            // Always try to write to folder (non-blocking, background)
-            if (dataFolderHandle) {
+            if (serverMode) {
+                serverSavePage(page);
+            } else if (dataFolderHandle) {
                 exportPageToFolder(page).then(ok => {
                     if (ok) updateSyncStatus('synced');
                 }).catch(console.warn);
@@ -472,8 +550,10 @@ async function exportAllToFolder(forceNew = false) {
 
     async function deletePage(pageId) {
         const page = allPages.find(p => p.id === pageId);
-        // Write tombstone to folder so next session won't resurrect from file
-        if (page && dataFolderHandle) {
+        if (serverMode) {
+            serverDeletePage(pageId); // real file removal — no resurrection
+        } else if (page && dataFolderHandle) {
+            // file:// fallback: write tombstone so next session won't resurrect from file
             const tombstone = { ...page, deleted: true, updatedAt: Date.now() };
             exportPageToFolder(tombstone).catch(console.warn);
         }
@@ -491,10 +571,12 @@ async function exportAllToFolder(forceNew = false) {
         const pagesInFolder = allPages.filter(p => p.folderId === folderId);
         for (const p of pagesInFolder) {
             await dbDelete(STORE_PAGES, p.id);
+            serverDeletePage(p.id);
         }
         allPages = allPages.filter(p => p.folderId !== folderId);
         await dbDelete(STORE_FOLDERS, folderId);
         allFolders = allFolders.filter(f => f.id !== folderId);
+        scheduleFolderSync();
         renderPageTree();
         if (currentPageId && pagesInFolder.find(p => p.id === currentPageId)) {
             currentPageId = null;
@@ -513,6 +595,7 @@ async function exportAllToFolder(forceNew = false) {
             updatedAt: Date.now()
         };
         await dbPut(STORE_PAGES, copy);
+        serverSavePage(copy);
         allPages.unshift(copy);
         renderPageTree();
         openPage(copy.id);
@@ -624,6 +707,7 @@ async function exportAllToFolder(forceNew = false) {
             toggle.classList.toggle('collapsed', isNowCollapsed);
             folder.collapsed = isNowCollapsed;
             await dbPut(STORE_FOLDERS, folder);
+            scheduleFolderSync();
         });
 
         const label = div.querySelector('.tree-label');
@@ -642,6 +726,7 @@ async function exportAllToFolder(forceNew = false) {
                 await dbPut(STORE_FOLDERS, folder);
                 const idx = allFolders.findIndex(f => f.id === folder.id);
                 if (idx >= 0) allFolders[idx] = folder;
+                scheduleFolderSync();
                 renderPageTree();
             };
 
@@ -1423,6 +1508,9 @@ async function exportAllToFolder(forceNew = false) {
                 case 'hr': return '\n---\n';
                 case 'table': return '\n' + tableToMarkdown(node) + '\n';
                 case 'mark': return `==${children}==`;
+                case 'input':
+                    if (node.getAttribute('type') === 'checkbox') return node.checked ? '[x] ' : '[ ] ';
+                    return '';
                 case 'div':
                     if (node.classList.contains('code-block-wrapper')) {
                         const pre = node.querySelector('pre');
@@ -1802,13 +1890,15 @@ async function exportAllToFolder(forceNew = false) {
         const page = allPages.find(p => p.id === pageId);
         if (!page) return;
 
-        const data = {
-            type: 'NovaNotes_Page',
-            version: 1,
-            page: page
-        };
+        // Clean, artifact-style Markdown: title heading + small meta line + body.
+        const title = page.title || 'Untitled';
+        const date = new Date(page.updatedAt || page.createdAt || Date.now())
+            .toISOString().split('T')[0];
+        const body = htmlToMarkdown(page.content || '');
+        const md = `# ${title}\n\n> ${page.icon || '📄'} · *last updated ${date}*\n\n${body}\n`;
 
-        downloadJson(data, `${page.title || 'untitled'}.json`);
+        const safe = title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'untitled';
+        downloadText(md, `${safe}.md`, 'text/markdown');
     }
 
     async function exportAllData() {
@@ -1856,6 +1946,16 @@ async function exportAllToFolder(forceNew = false) {
         } catch (err) {
             alert('Import failed: ' + err.message);
         }
+    }
+
+    function downloadText(text, filename, mime = 'text/plain') {
+        const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
     }
 
     function downloadJson(data, filename) {
@@ -2053,6 +2153,20 @@ async function exportAllToFolder(forceNew = false) {
 
         // Force commit button – creates the force-commit.flag file
         document.getElementById('btnForceCommit').addEventListener('click', async () => {
+            if (serverMode) {
+                // One-click: add data/, commit, push (normal push, never -f)
+                updateSyncStatus('saving');
+                try {
+                    const r = await serverPush();
+                    updateSyncStatus(r.ok ? 'synced' : 'error');
+                    alert(r.ok ? '✅ ' + r.message : '⚠️ ' + r.message);
+                } catch (err) {
+                    updateSyncStatus('error');
+                    alert('⚠️ Push failed — is the server running?\n' + err.message);
+                }
+                return;
+            }
+            // file:// fallback: flag-file handshake with git-watcher.js
             const dir = await getDataFolderHandle();
             if (!dir) {
                 alert('Please select a data folder first (use Export to Folder).');

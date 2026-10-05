@@ -2,7 +2,27 @@
 
 # 🚀 NovaNotes -- A Lightweight, Local-First Notion Alternative
 
-NovaNotes is a **browser-based note‑taking app** that runs entirely on your machine. No cloud, no lag, no subscription. Your notes are stored in your browser's IndexedDB and can be **automatically backed up to a folder on your computer** -- and optionally synced to **GitHub** for version control and remote access.
+NovaNotes is a **browser-based note‑taking app** that runs entirely on your machine. No cloud, no lag, no subscription. Your notes live in the `data/` folder (git-tracked), and the app loads them fresh every time you open it.
+
+---
+
+## ▶️ Run (recommended)
+
+A tiny local server (`server.js`, Node stdlib — **no dependencies**) makes `data/` the single source of truth and gives you one-click git push.
+
+- **macOS:** double-click `run.command` (or `./run.command`)
+- **Windows:** double-click `run.bat`
+- **Any OS:** `node server.js`, then open **http://localhost:4000**
+
+Why a server (not opening `index.html` directly)? The `file://` protocol can't read the `data/` folder or run git — so notes wouldn't show and push wouldn't work. The server fixes both. It's idle (≈0% CPU) except when the browser calls it, and only runs while the terminal is open.
+
+**How it behaves**
+- Every open → all notes loaded fresh from `data/`.
+- Edits auto-save straight into `data/` (local, instant).
+- 🚀 button → `git add data/ && commit && push` (normal push, on demand).
+- Per-page export (📤 / right-click → Export) → clean `.md` file.
+
+> Opening `index.html` over `file://` still works as a read/write fallback on IndexedDB, but won't load `data/` or push. Use the server.
 
 ---
 
