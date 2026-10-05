@@ -4,14 +4,14 @@
     "name": "deep learning",
     "parentId": null,
     "createdAt": 1779341822268,
-    "collapsed": true
+    "collapsed": false
   },
   {
     "id": "nn_mpr5nss9_chctdxuzc",
     "name": "DSA",
     "parentId": null,
     "createdAt": 1780073263738,
-    "collapsed": true
+    "collapsed": false
   },
   {
     "id": "nn_moitaolj_yi0lp25s8",
@@ -39,14 +39,14 @@
     "name": "mongodb",
     "parentId": null,
     "createdAt": 1785915205855,
-    "collapsed": true
+    "collapsed": false
   },
   {
     "id": "nn_mps5748r_hc2hyicwh",
     "name": "SOrting",
     "parentId": null,
     "createdAt": 1780132951612,
-    "collapsed": true
+    "collapsed": false
   },
   {
     "id": "nn_mrklk126_vnw975nxn",
