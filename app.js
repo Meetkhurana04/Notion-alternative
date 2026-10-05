@@ -670,7 +670,10 @@ async function exportAllToFolder(forceNew = false) {
             tree.appendChild(folderEl);
         });
 
-        const rootPages = filteredPages.filter(p => !p.folderId);
+        // Root pages = no folder, OR a folderId whose folder no longer exists
+        // (orphans would otherwise vanish from the tree entirely).
+        const folderIds = new Set(allFolders.map(f => f.id));
+        const rootPages = filteredPages.filter(p => !p.folderId || !folderIds.has(p.folderId));
         rootPages.forEach(page => {
             tree.appendChild(createPageElement(page));
         });
