@@ -1,10 +1,6 @@
 @echo off
-echo Starting NovaNotes...
-
-:: Start the Git watcher in a background window
-start /B node git-watcher.js
-
-:: Open the app in Chrome
-start chrome "%~dp0index.html"
-
-echo NovaNotes is running!
+echo Starting NovaNotes server...
+cd /d "%~dp0"
+:: Open the app once the server is up
+start "" cmd /c "timeout /t 1 >nul & start http://localhost:4000"
+node server.js
