@@ -18,14 +18,14 @@
     "name": "English",
     "parentId": null,
     "createdAt": 1777391984647,
-    "collapsed": true
+    "collapsed": false
   },
   {
     "id": "nn_mpnt3qpo_61kky3egi",
     "name": "express and node js",
     "parentId": null,
     "createdAt": 1779870774012,
-    "collapsed": true
+    "collapsed": false
   },
   {
     "id": "nn_msgcpw5w_4v9utzagc",
@@ -39,7 +39,7 @@
     "name": "mongodb",
     "parentId": null,
     "createdAt": 1785915205855,
-    "collapsed": false
+    "collapsed": true
   },
   {
     "id": "nn_mps5748r_hc2hyicwh",
@@ -53,7 +53,7 @@
     "name": "SQL DBMS",
     "parentId": null,
     "createdAt": 1784030263134,
-    "collapsed": true
+    "collapsed": false
   },
   {
     "id": "nn_mpi25mio_lpws9zl48",
@@ -67,7 +67,7 @@
     "name": "techfryday",
     "parentId": null,
     "createdAt": 1780154522760,
-    "collapsed": true
+    "collapsed": false
   },
   {
     "id": "nn_mt7gqo6u_4deu286fn",
