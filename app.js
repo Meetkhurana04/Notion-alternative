@@ -1186,7 +1186,11 @@ async function exportAllToFolder() {
         }
 
         const html = clipboardData.getData('text/html');
-        if (html && html.trim()) {
+        const plain = clipboardData.getData('text/plain');
+        // Code editors (VS Code etc.) put syntax-colored div/span HTML on the clipboard.
+        // For a .md file that's just colored source, so render the plain markdown instead.
+        const editorHtml = html && !/<(?!\/?(div|span|br|meta)\b)[a-z]/i.test(html);
+        if (html && html.trim() && !(editorHtml && plain && hasMarkdownPatterns(plain))) {
             e.preventDefault();
             const cleaned = cleanPastedHtml(html);
             insertHtmlAtCursor(cleaned);
@@ -2407,4 +2411,75 @@ async function exportAllToFolder() {
     }
 
     document.addEventListener('DOMContentLoaded', init);
+})();
+// ============ FIND IN PAGE (Cmd/Ctrl+F) ============
+// The desktop app has no browser find bar, so this is ours. The CSS Custom
+// Highlight API marks matches without touching the note's HTML (nothing gets saved).
+(function () {
+    if (!navigator.userAgent.includes('Electron') || !window.CSS || !CSS.highlights) return;
+    const bar = document.createElement('div');
+    bar.className = 'find-bar';
+    bar.hidden = true;
+    bar.innerHTML = '<input placeholder="Find…"><span></span>' +
+        '<button data-d="-1" title="Previous (Shift+Enter)">↑</button>' +
+        '<button data-d="1" title="Next (Enter)">↓</button><button data-x title="Close (Esc)">✕</button>';
+    document.body.append(bar);
+    const input = bar.querySelector('input'), count = bar.querySelector('span');
+    let ranges = [], cur = 0;
+
+    function search() {
+        ranges = []; cur = 0;
+        const q = input.value.toLowerCase();
+        if (q) {
+            const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, n =>
+                bar.contains(n) || !n.parentElement.checkVisibility() ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT);
+            for (let n; (n = walk.nextNode());) {
+                const t = n.data.toLowerCase();
+                for (let i = t.indexOf(q); i !== -1; i = t.indexOf(q, i + q.length)) {
+                    const r = new Range();
+                    r.setStart(n, i); r.setEnd(n, i + q.length);
+                    ranges.push(r);
+                }
+            }
+        }
+        show();
+    }
+
+    function show() {
+        CSS.highlights.set('find', new Highlight(...ranges));
+        CSS.highlights.set('find-current', new Highlight(...ranges.slice(cur, cur + 1)));
+        count.textContent = input.value ? `${ranges.length ? cur + 1 : 0}/${ranges.length}` : '';
+        if (ranges[cur]) ranges[cur].startContainer.parentElement.scrollIntoView({ block: 'center' });
+    }
+
+    function step(d) {
+        if (!ranges.length) return;
+        cur = (cur + d + ranges.length) % ranges.length;
+        show();
+    }
+
+    function close() {
+        bar.hidden = true;
+        CSS.highlights.clear();
+    }
+
+    window.addEventListener('keydown', e => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            const sel = String(window.getSelection());
+            if (sel && !sel.includes('\n')) input.value = sel;
+            bar.hidden = false;
+            input.focus(); input.select();
+            search(); // re-run on every open: notes may have changed since last time
+        }
+    }, true);
+    input.addEventListener('input', search);
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); step(e.shiftKey ? -1 : 1); }
+        if (e.key === 'Escape') close();
+    });
+    bar.addEventListener('click', e => {
+        const b = e.target.closest('button');
+        if (b) b.dataset.x !== undefined ? close() : step(+b.dataset.d);
+    });
 })();

@@ -1861,4 +1861,13 @@ mark, .highlight {
 #saveStatus {
     transition: color 0.3s ease;
     font-size: 12px;
-}
+}
+/* Find bar (Cmd/Ctrl+F, desktop app) */
+.find-bar { position: fixed; top: 12px; right: 16px; z-index: 10000; display: flex; gap: 6px; align-items: center; padding: 6px 8px; background: var(--bg-modal); border: 1px solid var(--bg-hover); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+.find-bar[hidden] { display: none; }
+.find-bar input { width: 200px; background: var(--bg-input); color: var(--text-primary); border: 0; border-radius: 5px; padding: 5px 8px; outline: none; }
+.find-bar span { color: var(--text-secondary); font-size: 12px; min-width: 36px; text-align: center; }
+.find-bar button { background: none; border: 0; color: var(--text-primary); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+.find-bar button:hover { background: var(--bg-hover); }
+::highlight(find) { background: rgba(255, 213, 0, .35); }
+::highlight(find-current) { background: #ff9632; color: #000; }

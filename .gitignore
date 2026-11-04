@@ -6,3 +6,6 @@
 # NovaNotes specific flag files (if you don't want them tracked)
 data/force-commit.flag
 data/.auto-sync
+# Desktop app
+node_modules/
+dist/

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Storage Works</title>
+<style>
+    :root { --bg: #fff; --fg: #222; --muted: #777; --box: #f4f4f2; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #191919; --fg: #eee; --muted: #999; --box: #252525; } }
+    body { background: var(--bg); color: var(--fg); font: 16px/1.6 -apple-system, Segoe UI, sans-serif; margin: 0; }
+    main { max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    h2 { margin-top: 32px; font-size: 19px; }
+    .flow { background: var(--box); border-radius: 10px; padding: 14px 16px; font: 14px/1.9 ui-monospace, monospace; overflow-x: auto; }
+    code { background: var(--box); padding: 1px 5px; border-radius: 4px; }
+    .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+    <h1>How your notes are stored</h1>
+    <p class="muted">The short version. Three places, one direction.</p>
+
+    <div class="flow">
+        you type<br>
+        &nbsp;↓ &nbsp;(auto, ~instant)<br>
+        📄 <b>file on your computer</b> — <code>data/nn_xxx_title.json</code><br>
+        &nbsp;↓ &nbsp;(only when you press 🚀)<br>
+        ☁️ <b>your private GitHub repo</b> — backup + other devices
+    </div>
+
+    <h2>1. You type → saved to a file</h2>
+    <p>Every note is one JSON file in the <code>data/</code> folder. You stop typing, it saves. No button needed.</p>
+    <p>That folder is the truth. Open the app → it reads that folder fresh. Nothing hidden in the browser.</p>
+
+    <h2>2. You press 🚀 → sent to GitHub</h2>
+    <p>The rocket button does <code>git add</code> → <code>commit</code> → <code>push</code> to your repo. That's your backup.</p>
+    <p>No 🚀, no backup. Your notes are still safe on disk — just not on GitHub yet.</p>
+
+    <h2>Delete doesn't really delete</h2>
+    <p>Deleting a note writes <code>"deleted": true</code> into its file. The file stays. The app just hides it.</p>
+    <p>Push never removes files from GitHub either. Only you can do that (on GitHub, or <code>git rm</code>).</p>
+
+    <h2>Two windows, same note?</h2>
+    <p>The older window's save is refused and you get a warning. So an old copy can't overwrite newer work.</p>
+
+    <h2>Where is the folder?</h2>
+    <p>Desktop app: <b>Account → Show notes folder</b> in the menu. Usually <code>Documents/NovaNotes/&lt;repo&gt;</code>.</p>
+    <p>New computer? Log in, pick the same repo — it downloads everything.</p>
+    <p class="muted">Heads up: the app doesn't pull. If you edit on two computers, push on one, then run <code>git pull</code> in the notes folder on the other before editing there.</p>
+
+    <h2>Login stuff</h2>
+    <p>GitHub login gives the app a key. It's locked in your OS keychain, never written into the repo. Sign out with <b>Account → Switch account / repo</b> — your notes stay put.</p>
+</main>
+</body>
+</html>

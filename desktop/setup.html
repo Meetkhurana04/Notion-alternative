@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>NovaNotes — Setup</title>
+<style>
+    :root { --bg: #fff; --fg: #222; --muted: #777; --line: #e3e3e3; --accent: #2f6feb; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #191919; --fg: #eee; --muted: #999; --line: #333; } }
+    body { background: var(--bg); color: var(--fg); font: 15px -apple-system, Segoe UI, sans-serif; margin: 0; }
+    main { max-width: 460px; margin: 60px auto; padding: 0 16px; }
+    h1 { font-size: 24px; } .muted { color: var(--muted); }
+    button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; font-size: 15px; cursor: pointer; }
+    button.ghost { background: none; color: var(--accent); padding: 6px 0; }
+    .code { font: 600 32px ui-monospace, monospace; letter-spacing: 4px; margin: 12px 0; }
+    input { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: none; color: inherit; font-size: 15px; margin: 6px 0; }
+    #list { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+    #list div { padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+    #list div:hover { background: rgba(127,127,127,.12); }
+    .err { color: #d33; white-space: pre-wrap; } [hidden] { display: none; }
+    a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+    <h1>⚡ NovaNotes</h1>
+
+    <section id="s1">
+        <p class="muted">Your notes are saved on this computer and backed up to a private GitHub repo you own.</p>
+        <button id="login">Login with GitHub</button>
+        <div id="codeBox" hidden>
+            <p>GitHub has opened in your browser. Enter this code there (it's copied to your clipboard):</p>
+            <div class="code" id="code"></div>
+            <p class="muted">Waiting for you to approve…</p>
+        </div>
+    </section>
+
+    <section id="s2" hidden>
+        <p>Hi <b id="who"></b>! Where should your notes live?</p>
+        <h3>New here? Create a private repo</h3>
+        <input id="newName" value="novanotes-notes">
+        <button id="create">Create private repo</button>
+        <h3>Already using NovaNotes? Pick your repo</h3>
+        <input id="filter" placeholder="Search repos…">
+        <div id="list"></div>
+        <button class="ghost" id="folder">Repo already on this computer? Pick its folder</button>
+    </section>
+
+    <p id="busy" class="muted" hidden>Setting up…</p>
+    <p class="err" id="err"></p>
+    <p><a href="../storage.html" target="_blank">How does storage work?</a></p>
+</main>
+<script>
+    const $ = id => document.getElementById(id);
+    let repos = [];
+    const fail = e => { $('busy').hidden = true; $('err').textContent = String(e.message || e).replace(/^Error invoking remote method '\w+': (Error: )?/, ''); };
+    const run = async p => { $('err').textContent = ''; $('busy').hidden = false; try { await p; } catch (e) { fail(e); } };
+
+    nova.onCode(({ code }) => {
+        $('code').textContent = code; $('codeBox').hidden = false; $('login').hidden = true;
+        navigator.clipboard.writeText(code).catch(() => {});
+    });
+
+    $('login').onclick = async () => {
+        $('err').textContent = '';
+        try {
+            $('who').textContent = await nova.login();
+            repos = await nova.repos();
+            $('s1').hidden = true; $('s2').hidden = false; draw();
+        } catch (e) { fail(e); $('login').hidden = false; $('codeBox').hidden = true; }
+    };
+
+    function draw() {
+        const q = $('filter').value.toLowerCase();
+        $('list').innerHTML = '';
+        repos.filter(r => r.name.toLowerCase().includes(q)).forEach(r => {
+            const d = document.createElement('div');
+            d.textContent = (r.private ? '🔒 ' : '🌐 ') + r.name;
+            d.onclick = () => run(nova.useRepo(r.name, false));
+            $('list').append(d);
+        });
+    }
+    $('filter').oninput = draw;
+    $('create').onclick = () => run(nova.useRepo($('newName').value.trim(), true));
+    $('folder').onclick = () => run(nova.useFolder().then(r => { if (!r) $('busy').hidden = true; }));
+</script>
+</body>
+</html>

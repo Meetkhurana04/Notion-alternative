@@ -1,15 +1,42 @@
 {
-  "name": "notion_alternative",
+  "name": "novanotes",
   "version": "1.0.0",
-  "description": "\"# Notion-alternative\"",
-  "main": "app.js",
+  "description": "Local-first notes, backed up to your own GitHub repo",
+  "main": "desktop/main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "electron .",
+    "dist": "electron-builder",
+    "test": "node test_server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "chokidar": "^5.0.0"
+  },
+  "productName": "NovaNotes",
+  "build": {
+    "appId": "com.novanotes.app",
+    "productName": "NovaNotes",
+    "files": [
+      "desktop/**",
+      "server.js",
+      "index.html",
+      "app.js",
+      "style.css",
+      "storage.html",
+      "package.json"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0"
   }
 }

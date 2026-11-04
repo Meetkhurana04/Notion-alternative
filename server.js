@@ -24,6 +24,7 @@ const { execFile } = require('child_process');
 
 const ROOT = process.env.NOVA_ROOT || __dirname; // env override is for test_server.js
 const DATA = path.join(ROOT, 'data');
+const STATIC = __dirname; // app files live next to server.js; notes live in ROOT (differs in the desktop app)
 const PORT = 4000;
 
 const MIME = {
@@ -154,8 +155,8 @@ async function gitPush() {
 async function serveStatic(req, res) {
     let rel = decodeURIComponent(req.url.split('?')[0]);
     if (rel === '/') rel = '/index.html';
-    const filePath = path.normalize(path.join(ROOT, rel));
-    if (!filePath.startsWith(ROOT + path.sep)) { res.writeHead(403); return res.end('Forbidden'); } // path-traversal guard
+    const filePath = path.normalize(path.join(STATIC, rel));
+    if (!filePath.startsWith(STATIC + path.sep)) { res.writeHead(403); return res.end('Forbidden'); } // path-traversal guard
     try {
         const stat = await fsp.stat(filePath);
         if (stat.isDirectory()) { res.writeHead(403); return res.end('Forbidden'); }
@@ -202,4 +203,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { safeName, readAllData, savePage, gitPush };
+module.exports = { safeName, readAllData, savePage, gitPush, server };
